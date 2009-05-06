@@ -60,7 +60,7 @@ end
 -- ----------------------------------------------------------------------------
 -- Class Declaration
 -- ----------------------------------------------------------------------------
-local MerlinGUI =
+local TimGUI =
 {
 	-- GUI control variables
 	--
@@ -100,15 +100,15 @@ local MerlinGUI =
 -- ----------------------------------------------------------------------------
 
 -- wxConfig load/save preferences functions
-function MerlinGUI.ConfigRestoreFramePosition( window, windowName )
-    local path = MerlinGUI.config:GetPath()
-    MerlinGUI.config:SetPath( "/"..windowName )
+function TimGUI.ConfigRestoreFramePosition( window, windowName )
+    local path = TimGUI.config:GetPath()
+    TimGUI.config:SetPath( "/"..windowName )
 
-    local _, s = MerlinGUI.config:Read( "s", -1 )
-    local _, x = MerlinGUI.config:Read( "x", 0 )
-    local _, y = MerlinGUI.config:Read( "y", 0 )
-    local _, w = MerlinGUI.config:Read( "w", 0 )
-    local _, h = MerlinGUI.config:Read( "h", 0 )
+    local _, s = TimGUI.config:Read( "s", -1 )
+    local _, x = TimGUI.config:Read( "x", 0 )
+    local _, y = TimGUI.config:Read( "y", 0 )
+    local _, w = TimGUI.config:Read( "w", 0 )
+    local _, h = TimGUI.config:Read( "h", 0 )
 
 	-- Always restore the position.
 	local clientX, clientY, clientWidth, clientHeight
@@ -129,12 +129,12 @@ function MerlinGUI.ConfigRestoreFramePosition( window, windowName )
         window:Iconize( true )
     end
 
-    MerlinGUI.config:SetPath( path )
+    TimGUI.config:SetPath( path )
 end
 
-function MerlinGUI.ConfigSaveFramePosition( window, windowName )
-    local path = MerlinGUI.config:GetPath()
-    MerlinGUI.config:SetPath( "/"..windowName )
+function TimGUI.ConfigSaveFramePosition( window, windowName )
+    local path = TimGUI.config:GetPath()
+    TimGUI.config:SetPath( "/"..windowName )
 
     local s    = 0
     local w, h = window:GetSizeWH()
@@ -146,16 +146,16 @@ function MerlinGUI.ConfigSaveFramePosition( window, windowName )
         s = 2
     end
 
-    MerlinGUI.config:Write( "s", s )
+    TimGUI.config:Write( "s", s )
 
     if s == 0 then
-        MerlinGUI.config:Write( "x", x )
-        MerlinGUI.config:Write( "y", y )
-        MerlinGUI.config:Write( "w", w )
-        MerlinGUI.config:Write( "h", h )
+        TimGUI.config:Write( "x", x )
+        TimGUI.config:Write( "y", y )
+        TimGUI.config:Write( "w", w )
+        TimGUI.config:Write( "h", h )
     end
 
-    MerlinGUI.config:SetPath( path )
+    TimGUI.config:SetPath( path )
 end
 
 -- ----------------------------------------------------------------------------
@@ -163,36 +163,36 @@ end
 -- ----------------------------------------------------------------------------
 
 -- Frame close event
-function MerlinGUI.OnClose( event )
-	MerlinGUI.ConfigSaveFramePosition( MerlinGUI.frame, "MainFrame" )
-	MerlinGUI.config:delete() -- always delete the config
+function TimGUI.OnClose( event )
+	TimGUI.ConfigSaveFramePosition( TimGUI.frame, "MainFrame" )
+	TimGUI.config:delete() -- always delete the config
 	event:Skip()
 end
 
 -- Frame close event
-function MerlinGUI.OnExit( event )
-	MerlinGUI.frame:Close( true )
+function TimGUI.OnExit( event )
+	TimGUI.frame:Close( true )
 end
 
 -- About dialog event handler
-function MerlinGUI.OnAbout( event )
+function TimGUI.OnAbout( event )
 	local info = wx.wxAboutDialogInfo()
     info:SetName( APP_NAME )
     info:SetVersion( APP_VERSION )
 	info:SetIcon( Resources.GetLargeAppIcon() )
-	info:SetWebSite( "http://rjpcomputing.com" )
+	info:SetWebSite( "http://timprojectenchanter.googlecode.com" )
     info:SetDescription( "Universal project wizard that uses a simple template engine to aid in new project creation." )
     info:SetCopyright( "Copyright (c) RJP Computing 2009" )
 
     wx.wxAboutBox(info)
 end
 
-function MerlinGUI.OnCreateProjectClicked( event )
+function TimGUI.OnCreateProjectClicked( event )
 	--assert( lfs.mkdir( "new" ) )
 	--assert( lfs.mkdir( "new/dir" ) )
 end
 
-function MerlinGUI.OnSourceControlOpenClicked( event )
+function TimGUI.OnSourceControlOpenClicked( event )
 	print( 'OnSourceControlOpenClicked' )
 end
 
@@ -203,13 +203,13 @@ end
 -- easier to debug in some cases.
 -- ----------------------------------------------------------------------------
 local function main()
-	MerlinGUI.config = wx.wxFileConfig( APP_NAME, "APP")
-	if MerlinGUI.config then
-		MerlinGUI.config:SetRecordDefaults()
+	TimGUI.config = wx.wxFileConfig( APP_NAME, "APP")
+	if TimGUI.config then
+		TimGUI.config:SetRecordDefaults()
 	end
 
     -- create the wxFrame window
-    MerlinGUI.frame = wx.wxFrame( wx.NULL,		-- no parent for toplevel windows
+    TimGUI.frame = wx.wxFrame( wx.NULL,		-- no parent for toplevel windows
 						wx.wxID_ANY,				-- don't need a wxWindow ID
                         APP_NAME,					-- caption on the frame
                         wx.wxDefaultPosition,		-- let system place the frame
@@ -217,20 +217,20 @@ local function main()
                         wx.wxDEFAULT_FRAME_STYLE )	-- use default frame styles
 
 	-- Set the applications icon
-    MerlinGUI.frame:SetIcon( Resources.GetAppIcon() )
+    TimGUI.frame:SetIcon( Resources.GetAppIcon() )
 
     -- create a single child window, wxWidgets will set the size to fill frame
-    MerlinGUI.panel = wx.wxPanel( MerlinGUI.frame, wx.wxID_ANY )
+    TimGUI.panel = wx.wxPanel( TimGUI.frame, wx.wxID_ANY )
 
     -- create a file menu
     local fileMenu = wx.wxMenu()
-    --fileMenu:Append( MerlinGUI.ID_FILE_OPEN, "&Open\tCtrl+O", "Open makefile for viewing only" )
+    --fileMenu:Append( TimGUI.ID_FILE_OPEN, "&Open\tCtrl+O", "Open makefile for viewing only" )
 	--fileMenu:AppendSeparator()
-    fileMenu:Append( MerlinGUI.ID_FILE_EXIT, "E&xit\tAlt+F4", "Quit the program" )
+    fileMenu:Append( TimGUI.ID_FILE_EXIT, "E&xit\tAlt+F4", "Quit the program" )
 
     -- create a help menu
     local helpMenu = wx.wxMenu()
-    helpMenu:Append( MerlinGUI.ID_HELP_ABOUT, "&About\tF1", "About the "..APP_NAME.." Application")
+    helpMenu:Append( TimGUI.ID_HELP_ABOUT, "&About\tF1", "About the "..APP_NAME.." Application")
 
     -- create a menu bar and append the file and help menus
     local menuBar = wx.wxMenuBar()
@@ -238,11 +238,11 @@ local function main()
     menuBar:Append( helpMenu, "&Help" )
 
     -- attach the menu bar into the frame
-    MerlinGUI.frame:SetMenuBar( menuBar )
+    TimGUI.frame:SetMenuBar( menuBar )
 
     -- create a simple status bar
-    MerlinGUI.frame:CreateStatusBar( 1, wx.wxST_SIZEGRIP )
-    MerlinGUI.frame:SetStatusText( "Welcome to "..APP_NAME.."." )
+    TimGUI.frame:CreateStatusBar( 1, wx.wxST_SIZEGRIP )
+    TimGUI.frame:SetStatusText( "Welcome to "..APP_NAME.."." )
 
 	-- Layout all the buttons using wxSizers
 	--
@@ -250,37 +250,37 @@ local function main()
 	-- Project name
 	local projectNameSizer = wx.wxBoxSizer( wx.wxHORIZONTAL )
 	projectNameSizer:Add( 18, 0, 0, 0, 5 ) -- Add spacer
-	local projectNameStaticText = wx.wxStaticText( MerlinGUI.panel, wx.wxID_ANY, "Project Name" )
+	local projectNameStaticText = wx.wxStaticText( TimGUI.panel, wx.wxID_ANY, "Project Name" )
 	projectNameSizer:Add( projectNameStaticText, 0, wx.wxALIGN_CENTER_VERTICAL + wx.wxTOP + wx.wxBOTTOM + wx.wxLEFT, 5 )
-	MerlinGUI.projectNameTextCtrl = wx.wxTextCtrl( MerlinGUI.panel, MerlinGUI.ID_PROJECT_NAME_TEXTCTRL )
-	projectNameSizer:Add( MerlinGUI.projectNameTextCtrl, 1,  wx.wxALL + wx.wxEXPAND, 5 )
+	TimGUI.projectNameTextCtrl = wx.wxTextCtrl( TimGUI.panel, TimGUI.ID_PROJECT_NAME_TEXTCTRL )
+	projectNameSizer:Add( TimGUI.projectNameTextCtrl, 1,  wx.wxALL + wx.wxEXPAND, 5 )
 	mainSizer:Add( projectNameSizer, 0, wx.wxEXPAND, 5 )
 	-- Destinations
 	--
-	local destinationSbSizer = wx.wxStaticBoxSizer( wx.wxStaticBox( MerlinGUI.panel, wx.wxID_ANY, "Destinations" ), wx.wxVERTICAL )
+	local destinationSbSizer = wx.wxStaticBoxSizer( wx.wxStaticBox( TimGUI.panel, wx.wxID_ANY, "Destinations" ), wx.wxVERTICAL )
 	local fgSizer1 = wx.wxFlexGridSizer( 2, 2, 0, 0 )
 	fgSizer1:AddGrowableCol( 1 )
 	fgSizer1:SetFlexibleDirection( wx.wxBOTH )
 	fgSizer1:SetNonFlexibleGrowMode( wx.wxFLEX_GROWMODE_SPECIFIED )
 	-- SourceControl
-	local sourceControlLocationStaticText = wx.wxStaticText( MerlinGUI.panel, wx.wxID_ANY, "Source Control" )
+	local sourceControlLocationStaticText = wx.wxStaticText( TimGUI.panel, wx.wxID_ANY, "Source Control" )
 	fgSizer1:Add( sourceControlLocationStaticText, 0, wx.wxALIGN_CENTER_VERTICAL + wx.wxALIGN_RIGHT + wx.wxTOP + wx.wxBOTTOM + wx.wxLEFT, 5 )
-	MerlinGUI.sourceControlLocationTextCtrl = wx.wxTextCtrl( MerlinGUI.panel, MerlinGUI.ID_SOURCE_CONTROL_LOCATION_TEXTCTRL, Settings.sourceControlProjectRoot or wx.wxEmptyString )
-	MerlinGUI.sourceControlOpenButton = wx.wxButton( MerlinGUI.panel, MerlinGUI.ID_SOURCE_CONTROL_OPEN_BUTTON,
+	TimGUI.sourceControlLocationTextCtrl = wx.wxTextCtrl( TimGUI.panel, TimGUI.ID_SOURCE_CONTROL_LOCATION_TEXTCTRL, Settings.sourceControlProjectRoot or wx.wxEmptyString )
+	TimGUI.sourceControlOpenButton = wx.wxButton( TimGUI.panel, TimGUI.ID_SOURCE_CONTROL_OPEN_BUTTON,
 		"...", wx.wxDefaultPosition, wx.wxSize( 24, -1 ) )
 	local sizer2 = wx.wxBoxSizer( wx.wxHORIZONTAL )
-	sizer2:Add( MerlinGUI.sourceControlLocationTextCtrl, 1, wx.wxALL, 5 )
-	sizer2:Add( MerlinGUI.sourceControlOpenButton, 0, wx.wxTOP + wx.wxBOTTOM + wx.wxRIGHT, 5 )
+	sizer2:Add( TimGUI.sourceControlLocationTextCtrl, 1, wx.wxALL, 5 )
+	sizer2:Add( TimGUI.sourceControlOpenButton, 0, wx.wxTOP + wx.wxBOTTOM + wx.wxRIGHT, 5 )
 	fgSizer1:Add( sizer2, 0, wx.wxEXPAND, 5 )
 	-- Local Path
-	local projectOutputStaticText = wx.wxStaticText( MerlinGUI.panel, wx.wxID_ANY, "Local Path" )
+	local projectOutputStaticText = wx.wxStaticText( TimGUI.panel, wx.wxID_ANY, "Local Path" )
 	fgSizer1:Add( projectOutputStaticText, 0, wx.wxALIGN_CENTER_VERTICAL + wx.wxALIGN_RIGHT + wx.wxTOP + wx.wxBOTTOM + wx.wxLEFT, 5 )
-	MerlinGUI.projectDestinationDirPicker = wx.wxDirPickerCtrl( MerlinGUI.panel, MerlinGUI.ID_PROJECT_DESTINATION_DIR_PICKER ) --, wx.wxEmptyString, "Select a folder", wx.wxDefaultPosition, wx.wxDefaultSize, wx.wxDIRP_DEFAULT_STYLE )
-	fgSizer1:Add( MerlinGUI.projectDestinationDirPicker, 0, wx.wxALL + wx.wxEXPAND, 5 )
+	TimGUI.projectDestinationDirPicker = wx.wxDirPickerCtrl( TimGUI.panel, TimGUI.ID_PROJECT_DESTINATION_DIR_PICKER ) --, wx.wxEmptyString, "Select a folder", wx.wxDefaultPosition, wx.wxDefaultSize, wx.wxDIRP_DEFAULT_STYLE )
+	fgSizer1:Add( TimGUI.projectDestinationDirPicker, 0, wx.wxALL + wx.wxEXPAND, 5 )
 	destinationSbSizer:Add( fgSizer1, 0, wx.wxEXPAND, 5 )
 	mainSizer:Add( destinationSbSizer, 0, wx.wxEXPAND + wx.wxBOTTOM + wx.wxRIGHT + wx.wxLEFT, 5 )
 	-- Line
-	--local staticLine = wx.wxStaticLine( MerlinGUI.panel, wx.wxID_ANY, wx.wxDefaultPosition, wx.wxDefaultSize, wx.wxLI_HORIZONTAL )
+	--local staticLine = wx.wxStaticLine( TimGUI.panel, wx.wxID_ANY, wx.wxDefaultPosition, wx.wxDefaultSize, wx.wxLI_HORIZONTAL )
 	--mainSizer:Add( staticLine, 0, wx.wxEXPAND + wx.wxALL, 5 )
 	-- Project control.
 	--
@@ -291,58 +291,58 @@ local function main()
 		table.insert( templates, name )
 	end
 	-- Project type
-	MerlinGUI.projectTypeChoice = wx.wxChoice( MerlinGUI.panel, MerlinGUI.ID_PROJECT_TYPE_CHOICE, wx.wxDefaultPosition, wx.wxDefaultSize, templates, 0 )
-	MerlinGUI.projectTypeChoice:SetSelection( 0 )
-	projectControlSizer:Add( MerlinGUI.projectTypeChoice, 1, wx.wxALL, 5 )
+	TimGUI.projectTypeChoice = wx.wxChoice( TimGUI.panel, TimGUI.ID_PROJECT_TYPE_CHOICE, wx.wxDefaultPosition, wx.wxDefaultSize, templates, 0 )
+	TimGUI.projectTypeChoice:SetSelection( 0 )
+	projectControlSizer:Add( TimGUI.projectTypeChoice, 1, wx.wxALL, 5 )
 	-- Create Project
-	MerlinGUI.createProjectButton = wx.wxButton( MerlinGUI.panel, MerlinGUI.ID_CREATE_PROJECT_BUTTON, "Create Project" )
-	projectControlSizer:Add( MerlinGUI.createProjectButton, 0, wx.wxALL, 5 )
+	TimGUI.createProjectButton = wx.wxButton( TimGUI.panel, TimGUI.ID_CREATE_PROJECT_BUTTON, "Create Project" )
+	projectControlSizer:Add( TimGUI.createProjectButton, 0, wx.wxALL, 5 )
 	mainSizer:Add( projectControlSizer, 0, wx.wxEXPAND, 5 )
 	-- Log
-	local sbSizer = wx.wxStaticBoxSizer( wx.wxStaticBox( MerlinGUI.panel, wx.wxID_ANY, "Log" ), wx.wxVERTICAL )
-	MerlinGUI.logTextCtrl = wx.wxTextCtrl( MerlinGUI.panel, MerlinGUI.ID_LOG_TEXTCTRL,
+	local sbSizer = wx.wxStaticBoxSizer( wx.wxStaticBox( TimGUI.panel, wx.wxID_ANY, "Log" ), wx.wxVERTICAL )
+	TimGUI.logTextCtrl = wx.wxTextCtrl( TimGUI.panel, TimGUI.ID_LOG_TEXTCTRL,
 		"", wx.wxDefaultPosition, wx.wxDefaultSize, wx.wxTE_MULTILINE + wx.wxTE_DONTWRAP )
-	sbSizer:Add( MerlinGUI.logTextCtrl, 1, wx.wxALL + wx.wxEXPAND, 5 )
+	sbSizer:Add( TimGUI.logTextCtrl, 1, wx.wxALL + wx.wxEXPAND, 5 )
 	mainSizer:Add( sbSizer, 1, wx.wxALL + wx.wxEXPAND, 5 )
 
 	--
-	MerlinGUI.panel:SetSizer( mainSizer )
-	mainSizer:SetSizeHints( MerlinGUI.frame )
+	TimGUI.panel:SetSizer( mainSizer )
+	mainSizer:SetSizeHints( TimGUI.frame )
 
 	-- Connect to the window event here.
 	--
-	MerlinGUI.frame:Connect( wx.wxEVT_CLOSE_WINDOW, MerlinGUI.OnClose )
+	TimGUI.frame:Connect( wx.wxEVT_CLOSE_WINDOW, TimGUI.OnClose )
 
 	-- Connect menu handlers here.
 	--
     -- connect the selection event of the exit menu item
-	MerlinGUI.frame:Connect( wx.wxID_EXIT, wx.wxEVT_COMMAND_MENU_SELECTED,
-		MerlinGUI.OnExit )
+	TimGUI.frame:Connect( wx.wxID_EXIT, wx.wxEVT_COMMAND_MENU_SELECTED,
+		TimGUI.OnExit )
 
     -- connect the selection event of the about menu item
-	MerlinGUI.frame:Connect( wx.wxID_ABOUT, wx.wxEVT_COMMAND_MENU_SELECTED,
-        MerlinGUI.OnAbout )
+	TimGUI.frame:Connect( wx.wxID_ABOUT, wx.wxEVT_COMMAND_MENU_SELECTED,
+        TimGUI.OnAbout )
 
 	-- Connect control event handlers here.
 	--
 	-- Connect the 'Source Cooontrol Open' button event
-	MerlinGUI.frame:Connect( MerlinGUI.ID_SOURCE_CONTROL_OPEN_BUTTON, wx.wxEVT_COMMAND_BUTTON_CLICKED,
-       MerlinGUI.OnSourceControlOpenClicked )
+	TimGUI.frame:Connect( TimGUI.ID_SOURCE_CONTROL_OPEN_BUTTON, wx.wxEVT_COMMAND_BUTTON_CLICKED,
+       TimGUI.OnSourceControlOpenClicked )
 
 	-- Connect the 'Create Project' button event
-	MerlinGUI.frame:Connect( MerlinGUI.ID_CREATE_PROJECT_BUTTON, wx.wxEVT_COMMAND_BUTTON_CLICKED,
-        MerlinGUI.OnCreateProjectClicked )
+	TimGUI.frame:Connect( TimGUI.ID_CREATE_PROJECT_BUTTON, wx.wxEVT_COMMAND_BUTTON_CLICKED,
+        TimGUI.OnCreateProjectClicked )
 
 	-- Setup default behavior.
 	--
-	--MerlinGUI.executeButton:SetFocus()
-	--MerlinGUI.executeButton:SetDefault()
+	--TimGUI.executeButton:SetFocus()
+	--TimGUI.executeButton:SetDefault()
 
 	-- Restore the saved settings
-	MerlinGUI.ConfigRestoreFramePosition( MerlinGUI.frame, "MainFrame" )
+	TimGUI.ConfigRestoreFramePosition( TimGUI.frame, "MainFrame" )
 
 	-- show the frame window
-    MerlinGUI.frame:Show( true )
+    TimGUI.frame:Show( true )
 
     -- Call wx.wxGetApp():MainLoop() last to start the wxWidgets event loop,
 	-- otherwise the wxLua program will exit immediately.
