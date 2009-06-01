@@ -1,6 +1,5 @@
 dofile( "Settings.lua" )
 require( "SourceControl" )
-require( "Template" )
 local preprocess = require( "luapp" ).preprocess
 
 function TemplateReplace( keywords, path )
@@ -31,10 +30,10 @@ function TemplateReplace( keywords, path )
 			local attr = lfs.attributes( f )
 			assert( type( attr ) == "table" )
 			if attr.mode == "directory" then
-				TemplateReplace( f )
+				TemplateReplace( {}, f )
 			else
 				-- Rename the file.
-				local newName, numReplaced = f:gsub( "root", value )
+				local newName, numReplaced = f:gsub( "root", keywords.ProjectName )
 
 				-- Find and replace all known variables in the files.
 				params.input = io.input( f )
@@ -45,16 +44,15 @@ function TemplateReplace( keywords, path )
 				end
 
 				if numReplaced > 0 then
-					os.remove( f )
+					--os.remove( f )
 				end
 			end
 		end
 	end
 end
 
-
---[[path = "/home/rpusztai/devel/lua/Merlin/test3"
-scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/test3/trunk"
+path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
+scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/test1/trunk"
 
 print( "-- Export "..Settings.Templates.wxGUI )
 print( SourceControl.Export( Settings.Templates.wxGUI, path ) )
@@ -63,7 +61,7 @@ print( "-- Make '"..path.."' a working copy" )
 print( SourceControl.MakeWorkingCopy( scPath, path ) )
 
 print( "-- Fill in the template" )
-TemplateReplace( "ProjectName", "MyProject", path )
+TemplateReplace( { ProjectName = "MyProject" }, path )
 
 print( "-- Add files" )
 print( SourceControl.AddFiles( path ) )
@@ -73,9 +71,9 @@ print( SourceControl.SetProperty( "svn:externals", path ) )
 
 print( "-- Commit to "..scPath )
 print( SourceControl.Commit( path, scPath ) )
-]]
 
-local path = "../"
+
+--[[local path = "../"
 local lookup =
 {
 	ProjectName = "MyProject",
@@ -84,3 +82,4 @@ local lookup =
 
 local err, message = preprocess( params )
 print( err, message )
+]]

@@ -1,3 +1,4 @@
+#!/usr/bin/env lua
 -- ----------------------------------------------------------------------------
 -- Name:		Tim.lua
 -- Purpose:		Helps start a project easily, using Subversion to store the
@@ -27,7 +28,7 @@
 -- ----------------------------------------------------------------------------
 require( "wx" )
 require( "lfs" )
-require( "Template" )
+require( "luapp" )
 require( "Resources" )
 dofile( "Settings.lua" )
 
