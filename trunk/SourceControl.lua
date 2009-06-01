@@ -49,10 +49,11 @@ local function RunProcess( command )
 	local retVal = ""
 
 	if processHandle then
-		for line in processHandle:lines() do
+		retVal = processHandle:read( "*a" )
+		--[[for line in processHandle:lines() do
 			retVal = retVal..line.."\n"
 			--print( line )
-	    end
+	    end]]
 
 	    processHandle:close()
 	else
@@ -91,11 +92,13 @@ function MakeWorkingCopy( scPath, path )
 	local logMsg = ""
 	-- Create repository location
 	local comment = "Created directories automatically."
-	local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath..' -m "'..comment..'"'
+	--local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath..' -m "'..comment..'"'
+	local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive "..scPath..' -m "'..comment..'"'
 	local cmdResponse = RunProcess( cmdToRun )
 	if cmdResponse:match( ".*failed.*" ) then error( cmdResponse ) end
 	-- Checkout to the local path.
-	cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath.." "..path
+	--cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath.." "..path
+	cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive "..scPath.." "..path
 	logMsg = logMsg.."\n"..RunProcess( cmdToRun )
 	
 	return logMsg
@@ -105,7 +108,8 @@ function Commit( path, scPath )
 	local logMsg = ""
 	-- Commit the changes to create the fresh project.
 	comment = "Initial import created by Merlin."
-	cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..path..' -m "'..comment..'"'
+	--local cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..path..' -m "'..comment..'"'
+	local cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive "..path..' -m "'..comment..'"'
 	logMsg = logMsg.."\n"..RunProcess( cmdToRun )
 
 	return logMsg
@@ -123,7 +127,8 @@ function AddFiles( path )
 				AddFiles( f )
 			else
 				-- Add the file
-				local cmdToRun = Settings.sourceControlExecutable.." add --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..f
+				--local cmdToRun = Settings.sourceControlExecutable.." add --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..f
+				local cmdToRun = Settings.sourceControlExecutable.." add --parents --non-interactive "..f
 				logMsg = logMsg..RunProcess( cmdToRun )
 			end
 		end

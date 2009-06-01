@@ -8,14 +8,14 @@ Settings =
 	Templates =
 	{
 		Console			= "http://rjpcomputing.homeip.net/svn/cpp/templates/console/trunk",
-		wxGUI			= "http://rjpcomputing.homeip.net/svn/cpp/templates/wxGUI/trunk/"
+		wxGUI			= "http://timprojectenchanter.googlecode.com/svn/templates/wxGUI/trunk/"
 	},
 	-- Source Control Settings
 	--
-	-- The root location to put as the default start location in the 
+	-- The root location to put as the default start location.
 	sourceControlProjectRoot	= "http://rjpcomputing.homeip.net/svn/cpp/",
 	-- The Subversion executable command.
 	sourceControlExecutable		= "svn",
-	sourceControlUsername		= "rpusztai",
-	sourceControlPassword		= "pinkeye1",
+	--sourceControlUsername		= "username",
+	--sourceControlPassword		= "password",
 }
