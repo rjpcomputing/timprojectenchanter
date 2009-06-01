@@ -30,7 +30,7 @@ function TemplateReplace( keywords, path )
 			local attr = lfs.attributes( f )
 			assert( type( attr ) == "table" )
 			if attr.mode == "directory" then
-				TemplateReplace( {}, f )
+				TemplateReplace( keywords, f )
 			else
 				-- Rename the file.
 				local newName, numReplaced = f:gsub( "root", keywords.ProjectName )
@@ -51,7 +51,8 @@ function TemplateReplace( keywords, path )
 	end
 end
 
-path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
+path = "./test1"
+--path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
 scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/test1/trunk"
 
 print( "-- Export "..Settings.Templates.wxGUI )
