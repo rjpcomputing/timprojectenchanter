@@ -51,7 +51,7 @@ function TemplateReplace( keywords, path )
 	end
 end
 
-path = "./test1"
+path = "../test1"
 --path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
 scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/test1/trunk"
 
