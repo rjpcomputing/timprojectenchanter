@@ -1,12 +1,12 @@
 // wxWidgets
-$(#)include <wx/image.h>
-$(#)include <wx/sysopt.h>
-$(#)include <wx/xrc/xmlres.h>
+$("#")include <wx/image.h>
+$("#")include <wx/sysopt.h>
+$("#")include <wx/xrc/xmlres.h>
 
-$(#)include "$(ProjectName).h"
-$(#)include "$(ProjectName)Frame.h"
-$(#)include "res/$(ProjectName)16x16.xpm"
-$(#)include "res/$(ProjectName)32x32.xpm"
+$("#")include "$(ProjectName).h"
+$("#")include "$(ProjectName)Frame.h"
+$("#")include "res/$(ProjectName)16x16.xpm"
+$("#")include "res/$(ProjectName)32x32.xpm"
 
 IMPLEMENT_APP( $(ProjectName)App )
 

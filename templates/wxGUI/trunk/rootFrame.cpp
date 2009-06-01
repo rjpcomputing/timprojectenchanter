@@ -1,7 +1,7 @@
 // wxWidgets
-$(#)include <wx/aboutdlg.h>
+$("#")include <wx/aboutdlg.h>
 
-$(#)include "$(ProjectName)Frame.h"
+$("#")include "$(ProjectName)Frame.h"
 
 $(ProjectName)Frame::$(ProjectName)Frame( wxWindow* parent )
 :

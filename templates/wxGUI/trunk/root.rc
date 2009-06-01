@@ -18,9 +18,9 @@ amain ICON "res/$(ProjectName).ico"
 
 // Manifest file for Windows XP
 //
-$(#)if defined( __MINGW32__ )
+$("#")if defined( __MINGW32__ )
 1 24 "res/res1.manifest"
-$(#)endif
+$("#")endif
 
 // Version
 //
@@ -28,11 +28,11 @@ VS_VERSION_INFO VERSIONINFO
  FILEVERSION 1,0,0,01
  PRODUCTVERSION 1,0,0,01
  FILEFLAGSMASK 0x17L
-$(#)ifdef _DEBUG
+$("#")ifdef _DEBUG
  FILEFLAGS 0x1L
-$(#)else
+$("#")else
  FILEFLAGS 0x0L
-$(#)endif
+$("#")endif
  FILEOS 0x4L
  FILETYPE 0x1L
  FILESUBTYPE 0x0L

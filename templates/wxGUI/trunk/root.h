@@ -8,10 +8,10 @@
 	@author $(UserName)
 	@data	$(Date)
 */
-$(#)ifndef $(ProjectName)_H
-$(#)define $(ProjectName)_H
+$("#")ifndef $(ProjectName)_H
+$("#")define $(ProjectName)_H
 
-$(#)include <wx/app.h>
+$("#")include <wx/app.h>
 
 class $(ProjectName)App : public wxApp
 {
@@ -23,5 +23,5 @@ protected:
 	virtual bool OnInit();
 	virtual int OnExit();
 };
-$(#)endif // $(ProjectName)_H
+$("#")endif // $(ProjectName)_H
 

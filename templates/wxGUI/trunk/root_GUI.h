@@ -5,21 +5,21 @@
 // PLEASE DO "NOT" EDIT THIS FILE!
 ///////////////////////////////////////////////////////////////////////////
 
-$(#)ifndef __$(ProjectName)_GUI__
-$(#)define __$(ProjectName)_GUI__
+$("#")ifndef __$(ProjectName)_GUI__
+$("#")define __$(ProjectName)_GUI__
 
-$(#)include <wx/string.h>
-$(#)include <wx/bitmap.h>
-$(#)include <wx/image.h>
-$(#)include <wx/icon.h>
-$(#)include <wx/menu.h>
-$(#)include <wx/gdicmn.h>
-$(#)include <wx/font.h>
-$(#)include <wx/colour.h>
-$(#)include <wx/settings.h>
-$(#)include <wx/sizer.h>
-$(#)include <wx/panel.h>
-$(#)include <wx/frame.h>
+$("#")include <wx/string.h>
+$("#")include <wx/bitmap.h>
+$("#")include <wx/image.h>
+$("#")include <wx/icon.h>
+$("#")include <wx/menu.h>
+$("#")include <wx/gdicmn.h>
+$("#")include <wx/font.h>
+$("#")include <wx/colour.h>
+$("#")include <wx/settings.h>
+$("#")include <wx/sizer.h>
+$("#")include <wx/panel.h>
+$("#")include <wx/frame.h>
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -48,4 +48,4 @@ class $(ProjectName)FrameBase : public wxFrame
 	
 };
 
-$(#)endif //__$(ProjectName)_GUI__
+$("#")endif //__$(ProjectName)_GUI__
