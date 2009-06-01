@@ -94,12 +94,14 @@ function MakeWorkingCopy( scPath, path )
 	local comment = "Created directories automatically."
 	--local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath..' -m "'..comment..'"'
 	local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive "..scPath..' -m "'..comment..'"'
-	local cmdResponse = RunProcess( cmdToRun )
-	if cmdResponse:match( ".*failed.*" ) then error( cmdResponse ) end
+	local logMsg = RunProcess( cmdToRun )
+	print( "-->", logMsg )
+	if logMsg:match( "failed" ) then error( logMsg ) end
 	-- Checkout to the local path.
 	--cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath.." "..path
 	cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive "..scPath.." "..path
 	logMsg = logMsg.."\n"..RunProcess( cmdToRun )
+	if logMsg:match( "authorization failed" ) then	error( logMsg ) end
 	
 	return logMsg
 end
