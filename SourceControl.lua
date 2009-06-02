@@ -142,9 +142,12 @@ end
 function SetProperty( property, path )
 	-- Get the root directories externals.
 	local propFile = path.."/svn-props.tmp"
-	local cmdToRun = Settings.sourceControlExecutable.." propset "..property.." --file "..propFile.." "..path
-	local retVal = RunProcess( cmdToRun )
-	os.remove( propFile )
+	local retVal = ""
+	if exists( propFile ) then
+		local cmdToRun = Settings.sourceControlExecutable.." propset "..property.." --file "..propFile.." "..path
+		retval = RunProcess( cmdToRun )
+		os.remove( propFile )
+	end
 
 	return retVal
 end

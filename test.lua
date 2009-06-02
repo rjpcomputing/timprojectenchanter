@@ -44,16 +44,16 @@ function TemplateReplace( keywords, path )
 				end
 
 				if numReplaced > 0 then
-					--os.remove( f )
+					os.remove( f )
 				end
 			end
 		end
 	end
 end
 
-path = "../test1"
+path = "../test3"
 --path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
-scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/test1/trunk"
+scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/test3/trunk"
 
 print( "-- Export "..Settings.Templates.wxGUI )
 print( SourceControl.Export( Settings.Templates.wxGUI, path ) )
