@@ -26,11 +26,13 @@
 --	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 --	THE SOFTWARE.
 -- ----------------------------------------------------------------------------
+dofile( "Settings.lua" )
 require( "wx" )
 require( "lfs" )
 require( "luapp" )
 require( "Resources" )
-dofile( "Settings.lua" )
+require( "SourceControl" )
+local preprocess = require( "luapp" ).preprocess
 
 -- ----------------------------------------------------------------------------
 -- CONSTANTS
@@ -56,6 +58,55 @@ end
 local function NewID()
     ID_IDCOUNTER = ( ID_IDCOUNTER or wx.wxID_HIGHEST ) + 1
     return ID_IDCOUNTER
+end
+
+local function TemplateReplace( keywords, path )
+	if type( keywords ) ~= "table" then
+		error( "bad argument #1 to TemplateReplace' (Expected table but recieved "..type( keywords )..")" )
+	end
+
+	local params =
+	{
+		lookup = _G,
+	}
+	-- Add the custom variables to the lookup table.
+	params.lookup.Generator = "Tim the Project Enchanter"
+	params.lookup.GeneratorURL = "http://timprojectenchanter.googlecode.com"
+	params.lookup.GeneratorSlogan = "Putting the big nasty teeth in project generation."
+	params.lookup.UserName = os.getenv( "USER" ) or os.getenv( "USERNAME" )
+	params.lookup.Date = os.date()
+
+	for keyword, value in pairs( keywords ) do
+		params.lookup[keyword] = value
+	end
+
+	-- Loop through files and rename each one
+	for file in lfs.dir( path ) do
+		if file ~= "." and file ~= ".." and file ~= ".svn" and file ~= "svn-props.tmp" then
+			local f = path..'/'..file
+			print( "\t "..f )
+			local attr = lfs.attributes( f )
+			assert( type( attr ) == "table" )
+			if attr.mode == "directory" then
+				TemplateReplace( keywords, f )
+			else
+				-- Rename the file.
+				local newName, numReplaced = f:gsub( "root", keywords.ProjectName )
+
+				-- Find and replace all known variables in the files.
+				params.input = io.input( f )
+				params.output = io.output( newName )
+				local err, message = preprocess( params )
+				if not err then
+					error( message )
+				end
+
+				if numReplaced > 0 then
+					os.remove( f )
+				end
+			end
+		end
+	end
 end
 
 -- ----------------------------------------------------------------------------
@@ -96,9 +147,26 @@ local TimGUI =
 	ID_LOG_TEXTCTRL						= NewID(),
 }
 
+local AppData =
+{
+	lastSourceControlPath				= nil,
+	lastLocalPath						= nil,
+}
+
 -- ----------------------------------------------------------------------------
 -- GUI RELATED FUNCTIONS
 -- ----------------------------------------------------------------------------
+
+-- Overwrite the print function so that the messages apear in the log field
+function print( ... )
+	-- Build the text to log
+	local msg = ""
+	for _, value in ipairs( { ... } ) do
+		msg = msg..tostring( value ).."\t"
+	end
+	msg = msg.."\n"
+	TimGUI.logTextCtrl:AppendText( msg )
+end
 
 -- wxConfig load/save preferences functions
 function TimGUI.ConfigRestoreFramePosition( window, windowName )
@@ -159,12 +227,38 @@ function TimGUI.ConfigSaveFramePosition( window, windowName )
     TimGUI.config:SetPath( path )
 end
 
+function TimGUI.ConfigRestorePaths()
+    local path = TimGUI.config:GetPath()
+    TimGUI.config:SetPath( "/Paths" )
+
+    local _, scPath = TimGUI.config:Read( "SourceControlPath", "" )
+    local _, localPath = TimGUI.config:Read( "LocalPath", "" )
+
+	-- Set these to AppData.
+	AppData.lastSourceControlPath = scPath
+	AppData.lastLocalPath = localPath
+	
+    TimGUI.config:SetPath( path )
+end
+
+function TimGUI.ConfigSavePaths()
+    local path = TimGUI.config:GetPath()
+    TimGUI.config:SetPath( "/Paths" )
+
+	TimGUI.config:Write( "SourceControlPath", TimGUI.sourceControlLocationTextCtrl:GetValue() )
+	TimGUI.config:Write( "LocalPath", TimGUI.projectDestinationDirPicker:GetPath() )
+
+    TimGUI.config:SetPath( path )
+end
+
 -- ----------------------------------------------------------------------------
 -- EVENT HANDLERS
 -- ----------------------------------------------------------------------------
 
 -- Frame close event
 function TimGUI.OnClose( event )
+	TimGUI.ConfigSavePaths()
+	
 	TimGUI.ConfigSaveFramePosition( TimGUI.frame, "MainFrame" )
 	TimGUI.config:delete() -- always delete the config
 	event:Skip()
@@ -189,12 +283,45 @@ function TimGUI.OnAbout( event )
 end
 
 function TimGUI.OnCreateProjectClicked( event )
-	--assert( lfs.mkdir( "new" ) )
-	--assert( lfs.mkdir( "new/dir" ) )
+	-- Clear the log message
+	TimGUI.logTextCtrl:Clear()
+	
+	local projName  = TimGUI.projectNameTextCtrl:GetValue()
+	local path = TimGUI.projectDestinationDirPicker:GetPath()
+	local scPath = TimGUI.sourceControlLocationTextCtrl:GetValue()
+	local template = Settings.Templates[TimGUI.projectTypeChoice:GetStringSelection()]
+	
+	-- Debugging info
+	--[[
+	print( 'ProjectName:', projName )
+	print( 'Local Path:', path )
+	print( 'Source Control Path:', scPath )
+	print( 'Template Location:', template )
+	]]
+	
+	-- Create a new project from the template
+	--
+	print( "-- Export "..template )
+	print( SourceControl.Export( template, path ) )
+
+	print( "-- Make '"..path.."' a working copy" )
+	print( SourceControl.MakeWorkingCopy( scPath, path ) )
+
+	print( "-- Fill in the template" )
+	TemplateReplace( { ProjectName = TimGUI.projectNameTextCtrl:GetValue() }, path )
+
+	print( "-- Add files" )
+	print( SourceControl.AddFiles( path ) )
+
+	print( "-- Add the externals" )
+	print( SourceControl.SetProperty( "svn:externals", path ) )
+
+	print( "-- Commit to "..scPath )
+	print( SourceControl.Commit( path, scPath ) )
 end
 
 function TimGUI.OnSourceControlOpenClicked( event )
-	print( 'OnSourceControlOpenClicked' )
+	wx.wxLaunchDefaultBrowser( TimGUI.sourceControlLocationTextCtrl:GetValue() )
 end
 
 -- ----------------------------------------------------------------------------
@@ -204,10 +331,11 @@ end
 -- easier to debug in some cases.
 -- ----------------------------------------------------------------------------
 local function main()
-	TimGUI.config = wx.wxFileConfig( APP_NAME, "APP")
+	TimGUI.config = wx.wxFileConfig( APP_NAME:gsub( " ", "" ), "APP")
 	if TimGUI.config then
 		TimGUI.config:SetRecordDefaults()
 	end
+	TimGUI.ConfigRestorePaths()
 
     -- create the wxFrame window
     TimGUI.frame = wx.wxFrame( wx.NULL,		-- no parent for toplevel windows
@@ -266,9 +394,14 @@ local function main()
 	-- SourceControl
 	local sourceControlLocationStaticText = wx.wxStaticText( TimGUI.panel, wx.wxID_ANY, "Source Control" )
 	fgSizer1:Add( sourceControlLocationStaticText, 0, wx.wxALIGN_CENTER_VERTICAL + wx.wxALIGN_RIGHT + wx.wxTOP + wx.wxBOTTOM + wx.wxLEFT, 5 )
-	TimGUI.sourceControlLocationTextCtrl = wx.wxTextCtrl( TimGUI.panel, TimGUI.ID_SOURCE_CONTROL_LOCATION_TEXTCTRL, Settings.sourceControlProjectRoot or wx.wxEmptyString )
+	-- Figure out what path to display
+	local scLocation = AppData.lastSourceControlPath
+	if scLocation:len() == 0 then
+		scLocation = Settings.sourceControlProjectRoot or wx.wxEmptyString
+	end
+	TimGUI.sourceControlLocationTextCtrl = wx.wxTextCtrl( TimGUI.panel, TimGUI.ID_SOURCE_CONTROL_LOCATION_TEXTCTRL, scLocation )
 	TimGUI.sourceControlOpenButton = wx.wxButton( TimGUI.panel, TimGUI.ID_SOURCE_CONTROL_OPEN_BUTTON,
-		"...", wx.wxDefaultPosition, wx.wxSize( 24, -1 ) )
+		"...", wx.wxDefaultPosition, wx.wxSize( 24, 28 ) )
 	local sizer2 = wx.wxBoxSizer( wx.wxHORIZONTAL )
 	sizer2:Add( TimGUI.sourceControlLocationTextCtrl, 1, wx.wxALL, 5 )
 	sizer2:Add( TimGUI.sourceControlOpenButton, 0, wx.wxTOP + wx.wxBOTTOM + wx.wxRIGHT, 5 )
@@ -277,6 +410,8 @@ local function main()
 	local projectOutputStaticText = wx.wxStaticText( TimGUI.panel, wx.wxID_ANY, "Local Path" )
 	fgSizer1:Add( projectOutputStaticText, 0, wx.wxALIGN_CENTER_VERTICAL + wx.wxALIGN_RIGHT + wx.wxTOP + wx.wxBOTTOM + wx.wxLEFT, 5 )
 	TimGUI.projectDestinationDirPicker = wx.wxDirPickerCtrl( TimGUI.panel, TimGUI.ID_PROJECT_DESTINATION_DIR_PICKER ) --, wx.wxEmptyString, "Select a folder", wx.wxDefaultPosition, wx.wxDefaultSize, wx.wxDIRP_DEFAULT_STYLE )
+	-- Set the last path
+	TimGUI.projectDestinationDirPicker:SetPath( AppData.lastLocalPath )
 	fgSizer1:Add( TimGUI.projectDestinationDirPicker, 0, wx.wxALL + wx.wxEXPAND, 5 )
 	destinationSbSizer:Add( fgSizer1, 0, wx.wxEXPAND, 5 )
 	mainSizer:Add( destinationSbSizer, 0, wx.wxEXPAND + wx.wxBOTTOM + wx.wxRIGHT + wx.wxLEFT, 5 )
@@ -336,7 +471,7 @@ local function main()
 
 	-- Setup default behavior.
 	--
-	--TimGUI.executeButton:SetFocus()
+	TimGUI.projectNameTextCtrl:SetFocus()
 	--TimGUI.executeButton:SetDefault()
 
 	-- Restore the saved settings
