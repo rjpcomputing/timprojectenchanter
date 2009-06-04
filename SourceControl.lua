@@ -1,14 +1,15 @@
 local lfs		= require( "lfs" )
-local assert	= assert
+--[[local assert	= assert
 local io		= io
 local os		= os
 local string	= string
 local table		= table
 local type		= type
-local print		= print
+--local print		= print
+local error		=	error
 local Settings	= Settings
-
-module( "SourceControl" )
+]]
+module( "SourceControl", package.seeall )
 _VERSION = "0.7"
 
 function exists( filename )
@@ -57,7 +58,7 @@ local function RunProcess( command )
 
 	    processHandle:close()
 	else
-		print( err )
+		error( err )
 	end
 
 	return retVal
@@ -95,7 +96,7 @@ function MakeWorkingCopy( scPath, path )
 	--local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath..' -m "'..comment..'"'
 	local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive "..scPath..' -m "'..comment..'"'
 	local logMsg = RunProcess( cmdToRun )
-	print( "-->", logMsg )
+	--print( "-->", logMsg )
 	if logMsg:match( "failed" ) then error( logMsg ) end
 	-- Checkout to the local path.
 	--cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath.." "..path
