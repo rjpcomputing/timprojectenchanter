@@ -51,9 +51,9 @@ function TemplateReplace( keywords, path )
 	end
 end
 
-path = "../test3"
+path = arg[1] or "../test7"
 --path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
-scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/test3/trunk"
+scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/test7/trunk"
 
 print( "-- Export "..Settings.Templates.wxGUI )
 print( SourceControl.Export( Settings.Templates.wxGUI, path ) )
@@ -72,7 +72,6 @@ print( SourceControl.SetProperty( "svn:externals", path ) )
 
 print( "-- Commit to "..scPath )
 print( SourceControl.Commit( path, scPath ) )
-
 
 --[[local path = "../"
 local lookup =

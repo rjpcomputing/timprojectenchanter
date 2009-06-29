@@ -18,7 +18,7 @@ end
 
 function shell.command( cmd, no_lf )
 	-- Echo command to run.
-	print( cmd )
+	print( ">>> "..cmd )
 	
 	-- Run the command and redirect both the stderr and stdout
 	local cmdAddition
@@ -58,4 +58,3 @@ function mt.__index( t, k )
        return shell.command( k.." "..concat( {...} ), true )
    end
 end
-
