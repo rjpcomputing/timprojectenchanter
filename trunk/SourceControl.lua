@@ -1,4 +1,5 @@
 local lfs		= require( "lfs" )
+require( "shell" )
 --[[local assert	= assert
 local io		= io
 local os		= os
@@ -69,12 +70,16 @@ end
 --	@param path Local path to get the source to.
 function Export( scTemplatePath, path )
 	-- Get all the files out of the template.
-	local cmdToRun = Settings.sourceControlExecutable.." export --force --ignore-externals "..scTemplatePath.." "..path
-	local retVal = RunProcess( cmdToRun )
+	local options = { "export", "--force", "--ignore-externals", scTemplatePath, path }
+	local status, retVal = shell[Settings.sourceControlExecutable]( options )
+	--local cmdToRun = Settings.sourceControlExecutable.." export --force --ignore-externals "..scTemplatePath.." "..path
+	--local retVal = RunProcess( cmdToRun )
 
 	-- Get the root directories externals.
-	cmdToRun = Settings.sourceControlExecutable.." propget svn:externals "..scTemplatePath
-	local externals = RunProcess( cmdToRun )
+	options = { "propget", "svn:externals", scTemplatePath }
+	local status, externals = shell[Settings.sourceControlExecutable]( options )
+	--cmdToRun = Settings.sourceControlExecutable.." propget svn:externals "..scTemplatePath
+	--local externals = RunProcess( cmdToRun )
 	-- Write a tmp file containing the externals.
 	if #externals > 0 then
 		local fHandle = io.output( path.."/svn-props.tmp" )
@@ -93,33 +98,40 @@ function MakeWorkingCopy( scPath, path )
 	local logMsg = ""
 	-- Create repository location
 	local comment = "Created directories automatically."
+	local options = { "mkdir", "--parents", "--non-interactive", scPath, "-m", comment }
+	local status, logMsg = shell[Settings.sourceControlExecutable]( options )
 	--local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath..' -m "'..comment..'"'
-	local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive "..scPath..' -m "'..comment..'"'
-	local logMsg = RunProcess( cmdToRun )
+	--local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive "..scPath..' -m "'..comment..'"'
+	--local logMsg = RunProcess( cmdToRun )
 	--print( "-->", logMsg )
 	if logMsg:match( "failed" ) then error( logMsg ) end
 	-- Checkout to the local path.
+	options = { "checkout", "--force", "--non-interactive", scPath, path }
+	local status, retVal = shell[Settings.sourceControlExecutable]( options )
 	--cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath.." "..path
-	cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive "..scPath.." "..path
-	logMsg = logMsg.."\n"..RunProcess( cmdToRun )
+	--cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive "..scPath.." "..path
+	--logMsg = logMsg.."\n"..RunProcess( cmdToRun )
+	logMsg = logMsg.."\n"..retVal
 	if logMsg:match( "authorization failed" ) then	error( logMsg ) end
 	
 	return logMsg
 end
 
 function Commit( path, scPath )
-	local logMsg = ""
 	-- Commit the changes to create the fresh project.
-	comment = "Initial import created by Merlin."
+	local comment = "Initial import created by Tim the Project Enchanter."
+	local options = { "commit", "--non-interactive", path, "-m", comment }
 	--local cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..path..' -m "'..comment..'"'
-	local cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive "..path..' -m "'..comment..'"'
-	logMsg = logMsg.."\n"..RunProcess( cmdToRun )
-
+	--local cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive "..path..' -m "'..comment..'"'
+	local logMsg = RunProcess( cmdToRun )
+	local status, logMsg = shell[Settings.sourceControlExecutable]( options )
+	
 	return logMsg
 end
 
 function AddFiles( path )
 	local logMsg = ""
+	
 	for file in lfs.dir( path ) do
 		if file ~= "." and file ~= ".." and file ~= ".svn" and file ~= "svn-props.tmp" then
 			local f = path..'/'..file
@@ -130,9 +142,12 @@ function AddFiles( path )
 				AddFiles( f )
 			else
 				-- Add the file
+				local options = { "add", "--parents", "--non-interactive", f }
+				local status, msg = shell[Settings.sourceControlExecutable]( options )
+				logMsg = logMsg..msg
 				--local cmdToRun = Settings.sourceControlExecutable.." add --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..f
-				local cmdToRun = Settings.sourceControlExecutable.." add --parents --non-interactive "..f
-				logMsg = logMsg..RunProcess( cmdToRun )
+				--local cmdToRun = Settings.sourceControlExecutable.." add --parents --non-interactive "..f
+				--logMsg = logMsg..RunProcess( cmdToRun )
 			end
 		end
 	end
@@ -143,10 +158,11 @@ end
 function SetProperty( property, path )
 	-- Get the root directories externals.
 	local propFile = path.."/svn-props.tmp"
-	local retVal = ""
 	if exists( propFile ) then
-		local cmdToRun = Settings.sourceControlExecutable.." propset "..property.." --file "..propFile.." "..path
-		retval = RunProcess( cmdToRun )
+		local options = { "propset", property, "--file", propFile, path }
+		local staus, retVal = shell[Settings.sourceControlExecutable]( options )
+		--local cmdToRun = Settings.sourceControlExecutable.." propset "..property.." --file "..propFile.." "..path
+		--local retval = RunProcess( cmdToRun )
 		os.remove( propFile )
 	end
 
