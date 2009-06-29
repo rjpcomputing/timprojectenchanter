@@ -123,7 +123,7 @@ function Commit( path, scPath )
 	local options = { "commit", "--non-interactive", path, "-m", comment }
 	--local cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..path..' -m "'..comment..'"'
 	--local cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive "..path..' -m "'..comment..'"'
-	local logMsg = RunProcess( cmdToRun )
+	--local logMsg = RunProcess( cmdToRun )
 	local status, logMsg = shell[Settings.sourceControlExecutable]( options )
 	
 	return logMsg
@@ -156,11 +156,13 @@ function AddFiles( path )
 end
 
 function SetProperty( property, path )
+	local retVal = property.." not found."
+	
 	-- Get the root directories externals.
 	local propFile = path.."/svn-props.tmp"
 	if exists( propFile ) then
 		local options = { "propset", property, "--file", propFile, path }
-		local staus, retVal = shell[Settings.sourceControlExecutable]( options )
+		local status, retVal = shell[Settings.sourceControlExecutable]( options )
 		--local cmdToRun = Settings.sourceControlExecutable.." propset "..property.." --file "..propFile.." "..path
 		--local retval = RunProcess( cmdToRun )
 		os.remove( propFile )

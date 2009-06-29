@@ -55,6 +55,6 @@ end
 
 function mt.__index( t, k )
    return function( ... )
-       return shell.command( k.." "..concat( {...} ), true )
+       return shell.command( k.." "..concat( {...} ), false )
    end
 end

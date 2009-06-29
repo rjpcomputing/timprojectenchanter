@@ -53,7 +53,7 @@ end
 
 path = arg[1] or "../test7"
 --path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
-scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/test7/trunk"
+scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/"..(arg[1] or "test7").."/trunk"
 
 print( "-- Export "..Settings.Templates.wxGUI )
 print( SourceControl.Export( Settings.Templates.wxGUI, path ) )
