@@ -168,6 +168,17 @@ function print( ... )
 	TimGUI.logTextCtrl:AppendText( msg )
 end
 
+function error( msg )
+	-- Build the text to log
+	--[[local msg = ""
+	for _, value in ipairs( { ... } ) do
+		msg = msg..tostring( value ).."\t"
+	end
+	msg = msg.."\n"
+	]]
+	wx.wxLogError( msg )
+end
+
 -- wxConfig load/save preferences functions
 function TimGUI.ConfigRestoreFramePosition( window, windowName )
     local path = TimGUI.config:GetPath()
