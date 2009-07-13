@@ -98,7 +98,7 @@ function MakeWorkingCopy( scPath, path )
 	local logMsg = ""
 	-- Create repository location
 	local comment = "Created directories automatically."
-	local options = { "mkdir", "--parents", "--non-interactive", scPath, "-m", comment }
+	local options = { "mkdir", "--parents", --[["--non-interactive",]] scPath, "-m", comment }
 	local status, logMsg = shell[Settings.sourceControlExecutable]( options )
 	--local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath..' -m "'..comment..'"'
 	--local cmdToRun = Settings.sourceControlExecutable.." mkdir --parents --non-interactive "..scPath..' -m "'..comment..'"'
@@ -106,32 +106,32 @@ function MakeWorkingCopy( scPath, path )
 	--print( "-->", logMsg )
 	if logMsg:match( "failed" ) then error( logMsg ) end
 	-- Checkout to the local path.
-	options = { "checkout", "--force", "--non-interactive", scPath, path }
+	options = { "checkout", "--force", --[["--non-interactive",]] scPath, path }
 	local status, retVal = shell[Settings.sourceControlExecutable]( options )
 	--cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..scPath.." "..path
 	--cmdToRun = Settings.sourceControlExecutable.." checkout --force --non-interactive "..scPath.." "..path
 	--logMsg = logMsg.."\n"..RunProcess( cmdToRun )
 	logMsg = logMsg.."\n"..retVal
 	if logMsg:match( "authorization failed" ) then	error( logMsg ) end
-	
+
 	return logMsg
 end
 
 function Commit( path, scPath )
 	-- Commit the changes to create the fresh project.
 	local comment = "Initial import created by Tim the Project Enchanter."
-	local options = { "commit", "--non-interactive", path, "-m", comment }
+	local options = { "commit", --[["--non-interactive",]] path, "-m", comment }
 	--local cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..path..' -m "'..comment..'"'
 	--local cmdToRun = Settings.sourceControlExecutable.." commit --non-interactive "..path..' -m "'..comment..'"'
 	--local logMsg = RunProcess( cmdToRun )
 	local status, logMsg = shell[Settings.sourceControlExecutable]( options )
-	
+
 	return logMsg
 end
 
 function AddFiles( path )
 	local logMsg = ""
-	
+
 	for file in lfs.dir( path ) do
 		if file ~= "." and file ~= ".." and file ~= ".svn" and file ~= "svn-props.tmp" then
 			local f = path..'/'..file
@@ -142,7 +142,7 @@ function AddFiles( path )
 				AddFiles( f )
 			else
 				-- Add the file
-				local options = { "add", "--parents", "--non-interactive", f }
+				local options = { "add", "--parents", --[["--non-interactive",]] f }
 				local status, msg = shell[Settings.sourceControlExecutable]( options )
 				logMsg = logMsg..msg
 				--local cmdToRun = Settings.sourceControlExecutable.." add --parents --non-interactive --username="..Settings.sourceControlUsername.." --password="..Settings.sourceControlPassword.." "..f
@@ -157,7 +157,7 @@ end
 
 function SetProperty( property, path )
 	local retVal = property.." not found."
-	
+
 	-- Get the root directories externals.
 	local propFile = path.."/svn-props.tmp"
 	if exists( propFile ) then
