@@ -51,7 +51,7 @@ function TemplateReplace( keywords, path )
 	end
 end
 
-path = arg[1] or "../test7"
+--[[path = "../"..arg[1] or "../test7"
 --path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
 scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/"..(arg[1] or "test7").."/trunk"
 
@@ -72,14 +72,34 @@ print( SourceControl.SetProperty( "svn:externals", path ) )
 
 print( "-- Commit to "..scPath )
 print( SourceControl.Commit( path, scPath ) )
-
---[[local path = "../"
-local lookup =
-{
-	ProjectName = "MyProject",
-	Type = "Console"
-}
-
-local err, message = preprocess( params )
-print( err, message )
 ]]
+
+local params =
+{
+	lookup = _G,
+}
+-- Add the custom variables to the lookup table.
+params.lookup.Generator = "Tim the Project Enchanter"
+params.lookup.GeneratorURL = "http://timprojectenchanter.googlecode.com"
+params.lookup.GeneratorSlogan = "Putting the big nasty teeth in project generation."
+params.lookup.UserName = os.getenv( "USER" ) or os.getenv( "USERNAME" )
+params.lookup.Date = os.date()
+params.lookup.ProjectName = arg[1] or "Pooter"
+
+local f = "res1.manifest"
+local newName = "res1.manifest"
+-- Find and replace all known variables in the files.
+params.input = io.input( f )
+params.output = "string" --io.output( newName )
+local err, message = preprocess( params )
+print( err )
+print('------------------------------------------')
+print( message )
+--print( preprocess( params ) )
+if not err then
+	error( message )
+end
+
+local fHandle = io.output( newName )
+fHandle:write( err )
+fHandle:close()

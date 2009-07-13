@@ -95,7 +95,15 @@ local function TemplateReplace( keywords, path )
 
 				-- Find and replace all known variables in the files.
 				params.input = io.input( f )
-				params.output = io.output( newName )
+
+				-- Check if the file name changed and only output the file if it has,
+				-- else output the preprocessed text to a string to write back later.
+				if numReplaced > 0 then
+					params.output = io.output( newName )
+				else
+					params.output = "string"
+				end
+
 				local err, message = preprocess( params )
 				if not err then
 					error( message )
@@ -103,6 +111,11 @@ local function TemplateReplace( keywords, path )
 
 				if numReplaced > 0 then
 					os.remove( f )
+				else
+					-- Write the changes back to the file.
+					local fHandle = io.output( newName )
+					fHandle:write( err )
+					fHandle:close()
 				end
 			end
 		end
@@ -248,7 +261,7 @@ function TimGUI.ConfigRestorePaths()
 	-- Set these to AppData.
 	AppData.lastSourceControlPath = scPath
 	AppData.lastLocalPath = localPath
-	
+
     TimGUI.config:SetPath( path )
 end
 
@@ -269,7 +282,7 @@ end
 -- Frame close event
 function TimGUI.OnClose( event )
 	TimGUI.ConfigSavePaths()
-	
+
 	TimGUI.ConfigSaveFramePosition( TimGUI.frame, "MainFrame" )
 	TimGUI.config:delete() -- always delete the config
 	event:Skip()
@@ -296,12 +309,12 @@ end
 function TimGUI.OnCreateProjectClicked( event )
 	-- Clear the log message
 	TimGUI.logTextCtrl:Clear()
-	
+
 	local projName  = TimGUI.projectNameTextCtrl:GetValue()
 	local path = TimGUI.projectDestinationDirPicker:GetPath()
 	local scPath = TimGUI.sourceControlLocationTextCtrl:GetValue()
 	local template = Settings.Templates[TimGUI.projectTypeChoice:GetStringSelection()]
-	
+
 	-- Debugging info
 	--[[
 	print( 'ProjectName:', projName )
@@ -309,7 +322,7 @@ function TimGUI.OnCreateProjectClicked( event )
 	print( 'Source Control Path:', scPath )
 	print( 'Template Location:', template )
 	]]
-	
+
 	-- Create a new project from the template
 	--
 	print( "-- Export "..template )
