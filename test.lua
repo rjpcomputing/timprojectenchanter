@@ -51,7 +51,7 @@ function TemplateReplace( keywords, path )
 	end
 end
 
---[[path = "../"..arg[1] or "../test7"
+path = "../"..arg[1] or "../test7"
 --path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
 scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/"..(arg[1] or "test7").."/trunk"
 
@@ -60,20 +60,21 @@ print( SourceControl.Export( Settings.Templates.wxGUI, path ) )
 
 print( "-- Make '"..path.."' a working copy" )
 print( SourceControl.MakeWorkingCopy( scPath, path ) )
-
+--[[
 print( "-- Fill in the template" )
 TemplateReplace( { ProjectName = "MyProject" }, path )
 
 print( "-- Add files" )
 print( SourceControl.AddFiles( path ) )
-
+]]
 print( "-- Add the externals" )
 print( SourceControl.SetProperty( "svn:externals", path ) )
-
+--[[
 print( "-- Commit to "..scPath )
 print( SourceControl.Commit( path, scPath ) )
 ]]
 
+--[[
 local params =
 {
 	lookup = _G,
@@ -103,3 +104,4 @@ end
 local fHandle = io.output( newName )
 fHandle:write( err )
 fHandle:close()
+]]

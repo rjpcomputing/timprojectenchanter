@@ -342,6 +342,9 @@ function TimGUI.OnCreateProjectClicked( event )
 
 	print( "-- Commit to "..scPath )
 	print( SourceControl.Commit( path, scPath ) )
+
+	print( "-- Update "..path.." to complete and get the latest changes" )
+	print( SourceControl.Update( path ) )
 end
 
 function TimGUI.OnSourceControlOpenClicked( event )
