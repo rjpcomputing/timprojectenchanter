@@ -1,0 +1,175 @@
+-- ----------------------------------------------------------------------------
+--	Author:		Ryan Pusztai <rjpcomputing@gmail.com>
+--	Date:		02/11/2009
+--	Version:	1.11
+--
+--	Copyright (C) 2008-2009 Ryan Pusztai
+--
+--	Permission is hereby granted, free of charge, to any person obtaining a copy
+--	of this software and associated documentation files (the "Software"), to deal
+--	in the Software without restriction, including without limitation the rights
+--	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+--	copies of the Software, and to permit persons to whom the Software is
+--	furnished to do so, subject to the following conditions:
+--
+--	The above copyright notice and this permission notice shall be included in
+--	all copies or substantial portions of the Software.
+--
+--	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+--	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+--	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+--	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+--	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+--	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+--	THE SOFTWARE.
+--
+--	NOTES:
+--		- use the '/' slash for all paths.
+--		- call boost.Configure() after your project is setup, not before.
+-- ----------------------------------------------------------------------------
+
+-- Package options
+addoption( "boost-shared", "Link against Boost as a shared library" )
+addoption( "boost-single-threaded", "Link against Boost using a single threaded runtime" )
+
+-- Namespace
+boost = {}
+
+---	Gets the Boost specific Toolset name. This only supports Visual C++ and
+--	GCC 4.2.x.
+--	TODO: Make this more flexable.
+--	@return {string} String that contains the Boost specific target name.
+function boost.GetToolsetName()
+	local toolsetName = ""
+
+	if target == "vs2003" then
+		toolsetName = "vc71"
+	elseif target == "vs2005" then
+		toolsetName = "vc80"
+	elseif target == "vs2008" then
+		toolsetName = "vc90"
+	elseif target == "gnu" or string.find( target or "", ".*-gcc" ) then
+		if windows then
+			toolsetName = "mgw43"
+		else
+			toolsetName = "gcc42"
+		end
+	end
+
+	return toolsetName
+end
+
+---	Generates a valid Boost library name.
+--	@param libraryName {string} Library name to build as a full Boost library
+--		name.
+--	@param isDebug [OPT] {boolean} If true it will generate the name of the debug
+--		version of the library. Defaults to false.
+--	Supported but not displayed options:
+--		- using-stlport - "Use the STLPort standard library rather than
+--		                   the default one supplied with your compiler"
+--	Comprimises:
+--		- Only supports VC and GCC4.2.x
+function boost.LibName( libraryName, isDebug )
+	local name = ""
+
+	-- Toolset - target/compiler.
+	local toolset = ""
+	if ( not linux ) then
+		toolset = "-" .. boost.GetToolsetName()
+	end
+	--print( "Toolset: ", toolset )
+
+	-- Threading
+	local threading = "-mt"
+	if options["boost-single-threaded"] then
+		threading = ""
+	end
+	--print( "Threading: ", threading )
+
+	-- ABI
+	local abi = ""
+	if not options["dynamic-runtime"] then abi = abi.."s" end
+	if isDebug then abi = abi.."d" end
+	if options["using-stlport"] then abi = abi.."p" end
+	-- Now add the '-' to finish the tag.
+	if abi:len() > 0 then abi = "-"..abi end
+	--print( "ABI:", abi )
+
+	name = "boost_"..libraryName..toolset..threading..abi
+	--print( name )
+
+	return name
+end
+
+---	Configure a C/C++ package to use Boost.
+--	@param pkg {table} Premake 'package' passed in that gets all the settings manipulated.
+--	@param libsToLink {table} [DEF] Table that contains the names of the Boost libraries needed to build.
+--		Defaults to an empty table.
+--
+--	Options supported:
+--		boost-shared - "Link against Boost as a shared library"
+--		boost-single-threaded - "Link against Boost using a single threaded runtime"
+--		dynamic-runtime - "Use the dynamicly loadable version of the runtime."
+--		unicode - "Use the Unicode character set."
+--		using-stlport - "Use the STLPort standard library rather than
+--		                 the default one supplied with your compiler"
+--
+--	Appended to package setup:
+--		package.includepaths			= (windows) { "$(BOOST_ROOT)" }
+--		package.libpaths				= (windows) { "$(BOOST_ROOT)/lib" }
+--		package.linkoptions				= (GCC w/ dynamic-runtime) { "-static" }
+--
+--	NOTES:
+--		Only supports VC and GCC4.2.x
+--
+--	Example:
+--		boost.Configure( package, { "libsToLink" } )
+function boost.Configure( pkg, libsToLink )
+	libsToLink = libsToLink or {}
+	-- Check to make sure that the pkg is valid.
+	assert( type( pkg ) == "table", "Param1:pkg type missmatch, should be a table." )
+	assert( type( libsToLink ) == "table", "Param2:libsToLink type missmatch, should be a table." )
+
+	pkg.includepaths			= pkg.includepaths or {}
+	if ( pkg.kind == "lib" ) then
+		table.insert( pkg.includepaths, "../boost_utils" )
+	else
+		table.insert( pkg.includepaths, "boost_utils" )
+	end
+
+	if windows then
+		pkg.libpaths				= pkg.libpaths or {}
+		pkg.defines					= pkg.defines or {}
+		pkg.buildoptions			= pkg.buildoptions or {}
+		if string.find( target or "", ".*-gcc" ) then
+			table.insert( pkg.buildoptions, { "-isystem $(BOOST_ROOT)" } )
+		elseif target == "gnu" then
+			table.insert( pkg.buildoptions, { "-isystem \"$(BOOST_ROOT)\"" } )
+		else
+			table.insert( pkg.includepaths, { "$(BOOST_ROOT)" } )
+		end
+		table.insert( pkg.libpaths, { "$(BOOST_ROOT)/lib" } )
+		table.insert( pkg.defines, { "_WIN32_WINNT=0x0501" } )	--(i.e. Windows XP target)
+		--(the following line prevents in boost: socket_types.hpp(27) : fatal error C1189: #error :  WinSock.h has already been included)
+		table.insert( pkg.defines, { "WIN32_LEAN_AND_MEAN" } )
+	end
+
+	if target == "gnu" or string.find( target or "", ".*-gcc" ) then
+		if not options["dynamic-runtime"] then
+			pkg.linkoptions			= pkg.linkoptions or {}
+			table.insert( pkg.linkoptions, { "-static" } )
+		end
+	end
+
+	-- Only add link libraries if not VC.
+	if not string.find( target or "", "vs*" ) then
+		-- Set Boost libraries to link.
+		-- boost.LibName( targetName, boostVer, isDebug )
+		local libs = {}
+		for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, true ) ) end
+		table.insert( pkg.config["Debug"].links, libs )
+		libs = {}
+		for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v ) ) end
+		table.insert( pkg.config["Release"].links, libs )
+	end
+end
