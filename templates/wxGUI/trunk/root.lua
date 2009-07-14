@@ -32,7 +32,6 @@ package.links								= {
 
 -- PACKAGE SETUP --------------------------------------------------------------
 --
-boost.Configure( package, { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
+--boost.Configure( package, { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
 Configure( package )
 wx.Configure( package )
-
