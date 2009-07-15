@@ -104,17 +104,20 @@ local function TemplateReplace( keywords, path )
 					params.output = "string"
 				end
 
-				local err, message = preprocess( params )
-				if not err then
+				local ret, message = preprocess( params )
+				if not ret then
 					error( message )
 				end
 
 				if numReplaced > 0 then
-					os.remove( f )
+					params.output:close()
+					params.input:close()
+
+					assert( os.remove( f ) )
 				else
 					-- Write the changes back to the file.
-					local fHandle = io.output( newName )
-					fHandle:write( err )
+					local fHandle = io.output( f )
+					fHandle:write( ret )
 					fHandle:close()
 				end
 			end
