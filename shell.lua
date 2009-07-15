@@ -19,24 +19,32 @@ end
 function shell.command( cmd, no_lf )
 	-- Echo command to run.
 	print( ">>> "..cmd )
-	
+
 	-- Run the command and redirect both the stderr and stdout
 	local cmdAddition
 	if IsWindows() then
-		cmdAddition = ' 2>&1 & echo "-retcode:%ERRORLEVEL%"'
+		cmdAddition = " 2>&1"
 	else
 		cmdAddition = ' 2>&1; echo "-retcode:$?"'
 	end
-	
+
 	local procHandle = io.popen( cmd..cmdAddition, "r" )
 	local procOutput = procHandle:read( "*a" )
 	procHandle:close()
-	
+
+	-- Windows does not seem to allow a single line grab of the errorlevel.
+	if IsWindows() then
+		-- Grab the return code after just the command is ran. This is a Windows thing.
+		procHandle = io.popen( "echo -retcode:%ERRORLEVEL%", "r" )
+		procOutput = procOutput..procHandle:read( "*a" )
+		procHandle:close()
+	end
+
 	-- Find the return code.
 	local i1, i2, ret = procOutput:find( "%-retcode:(%d+)\n$" )
 	if no_lf and i1 > 1 then i1 = i1 - 1 end
 	procOutput = procOutput:sub( 1, i1 - 1 )
-	
+
 	-- Return the <return_code> and <command_output>
 	return tonumber( ret ), procOutput
 end
@@ -49,7 +57,7 @@ local function concat( args )
            args[i] = s:find( "%s" ) and '"'..s..'"' or s
        end
    end
-   
+
    return table.concat( args, " " )
 end
 
