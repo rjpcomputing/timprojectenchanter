@@ -2,7 +2,7 @@ dofile( "Settings.lua" )
 require( "SourceControl" )
 local preprocess = require( "luapp" ).preprocess
 
-function TemplateReplace( keywords, path )
+local function TemplateReplace( keywords, path )
 	if type( keywords ) ~= "table" then
 		error( "bad argument #1 to TemplateReplace' (Expected table but recieved "..type( keywords )..")" )
 	end
@@ -37,14 +37,30 @@ function TemplateReplace( keywords, path )
 
 				-- Find and replace all known variables in the files.
 				params.input = io.input( f )
-				params.output = io.output( newName )
-				local err, message = preprocess( params )
-				if not err then
+
+				-- Check if the file name changed and only output the file if it has,
+				-- else output the preprocessed text to a string to write back later.
+				if numReplaced > 0 then
+					params.output = io.output( newName )
+				else
+					params.output = "string"
+				end
+
+				local ret, message = preprocess( params )
+				if not ret then
 					error( message )
 				end
 
 				if numReplaced > 0 then
-					os.remove( f )
+					params.output:close()
+					params.input:close()
+
+					assert( os.remove( f ) )
+				else
+					-- Write the changes back to the file.
+					local fHandle = io.output( f )
+					fHandle:write( ret )
+					fHandle:close()
 				end
 			end
 		end
@@ -60,19 +76,21 @@ print( SourceControl.Export( Settings.Templates.wxGUI, path ) )
 
 print( "-- Make '"..path.."' a working copy" )
 print( SourceControl.MakeWorkingCopy( scPath, path ) )
---[[
+
 print( "-- Fill in the template" )
 TemplateReplace( { ProjectName = "MyProject" }, path )
 
 print( "-- Add files" )
 print( SourceControl.AddFiles( path ) )
-]]
+
 print( "-- Add the externals" )
 print( SourceControl.SetProperty( "svn:externals", path ) )
---[[
+
 print( "-- Commit to "..scPath )
 print( SourceControl.Commit( path, scPath ) )
-]]
+
+print( "-- Update "..path )
+print( SourceControl.Update( path ) )
 
 --[[
 local params =
