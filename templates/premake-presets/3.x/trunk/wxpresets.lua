@@ -232,8 +232,8 @@ function wx.Configure( package, wxVer )
 
 		-- Set the targets.
 		if not ( package.kind == "winexe" or package.kind == "exe" ) then
-			package.config["Debug"].target = "`wx-config --debug=yes --basename`_"..targetName.."-`wx-config --release`"
-			package.config["Release"].target = "`wx-config --basename`_"..targetName.."-`wx-config --release`"
+			package.config["Debug"].target = wx.LibName( targetName, wxVer, true )	--"`wx-config --debug=yes --basename`_"..targetName.."-`wx-config --release`"
+			package.config["Release"].target = wx.LibName( targetName, wxVer )	--"`wx-config --basename`_"..targetName.."-`wx-config --release`"
 		end
 	end
 end
@@ -250,17 +250,21 @@ function wx.LibName( targetName, wxVer, isDebug )
 	local name = ""
 	-- Make the parameters optional.
 	local wx_ver = wxVer or "28"
+	local debug = ""
+	local unicode = ""
+	if isDebug then debug = "d" end
+	if options["unicode"] then unicode = "u" end
 
 	if windows then
-		local debug = ""
-		local unicode = ""
 		local monolithic = ""
 		local vc8 = ""
 
-		if options["unicode"] then unicode = "u" end
-		if isDebug then debug = "d" end
 		if options["wx-shared"] then monolithic = "m" end
 		name = "wxmsw"..wx_ver..unicode..monolithic..debug.."_"..targetName
+	elseif linux then
+		wx_ver = wx_ver:sub( 1, 1 ).."."..wx_ver:sub( 2 )
+		name = "wx_gtk2"..unicode..debug.."_"..targetName:lower().."-"..wx_ver
+		--print( name )
 	else
 		local debug = "no"
 		if isDebug then debug = "yes" end
