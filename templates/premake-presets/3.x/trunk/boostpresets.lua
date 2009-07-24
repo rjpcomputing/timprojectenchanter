@@ -1,7 +1,7 @@
 -- ----------------------------------------------------------------------------
 --	Author:		Ryan Pusztai <rjpcomputing@gmail.com>
---	Date:		02/11/2009
---	Version:	1.11
+--	Date:		07/22/2009
+--	Version:	1.20
 --
 --	Copyright (C) 2008-2009 Ryan Pusztai
 --
@@ -36,11 +36,19 @@ addoption( "boost-single-threaded", "Link against Boost using a single threaded 
 boost = {}
 
 ---	Gets the Boost specific Toolset name. This only supports Visual C++ and
---	GCC 4.2.x.
+--	GCC.
 --	TODO: Make this more flexable.
+--	@param gccVer [DEF] {string} The version of GCC that you are building for.
+--		Make sure that you leave the '.' out of the string. (i.e. "44" not "4.4")
+--		Defaults to "43" on Windows and "42" on Linux.
 --	@return {string} String that contains the Boost specific target name.
-function boost.GetToolsetName()
+function boost.GetToolsetName( gccVer )
 	local toolsetName = ""
+	if windows then
+		gccVer = gccVer or "43"
+	else
+		gccVer = gccVer or "42"
+	end
 
 	if target == "vs2003" then
 		toolsetName = "vc71"
@@ -50,9 +58,9 @@ function boost.GetToolsetName()
 		toolsetName = "vc90"
 	elseif target == "gnu" or string.find( target or "", ".*-gcc" ) then
 		if windows then
-			toolsetName = "mgw43"
+			toolsetName = "mgw"..gccVer
 		else
-			toolsetName = "gcc42"
+			toolsetName = "gcc"..gccVer
 		end
 	end
 
@@ -62,20 +70,22 @@ end
 ---	Generates a valid Boost library name.
 --	@param libraryName {string} Library name to build as a full Boost library
 --		name.
---	@param isDebug [OPT] {boolean} If true it will generate the name of the debug
+--	@param isDebug [DEF] {boolean} If true it will generate the name of the debug
 --		version of the library. Defaults to false.
+--	@param gccVer [DEF] {string} The version of GCC that you are building for.
+--		Defaults to "43" on Windows and "42" on Linux.
 --	Supported but not displayed options:
 --		- using-stlport - "Use the STLPort standard library rather than
 --		                   the default one supplied with your compiler"
 --	Comprimises:
---		- Only supports VC and GCC4.2.x
-function boost.LibName( libraryName, isDebug )
+--		- Only supports VC and GCC
+function boost.LibName( libraryName, isDebug, gccVer )
 	local name = ""
 
 	-- Toolset - target/compiler.
 	local toolset = ""
 	if ( not linux ) then
-		toolset = "-" .. boost.GetToolsetName()
+		toolset = "-" .. boost.GetToolsetName( gccVer )
 	end
 	--print( "Toolset: ", toolset )
 
@@ -105,6 +115,8 @@ end
 --	@param pkg {table} Premake 'package' passed in that gets all the settings manipulated.
 --	@param libsToLink {table} [DEF] Table that contains the names of the Boost libraries needed to build.
 --		Defaults to an empty table.
+--	@param gccVer {string} [DEF] The version of GCC that you are building for.
+--		Defaults to "43" on Windows and "42" on Linux.
 --
 --	Options supported:
 --		boost-shared - "Link against Boost as a shared library"
@@ -120,11 +132,11 @@ end
 --		package.linkoptions				= (GCC w/ dynamic-runtime) { "-static" }
 --
 --	NOTES:
---		Only supports VC and GCC4.2.x
+--		Only supports VC and GCC
 --
 --	Example:
---		boost.Configure( package, { "libsToLink" } )
-function boost.Configure( pkg, libsToLink )
+--		boost.Configure( package, { "libsToLink" }, "44" )
+function boost.Configure( pkg, libsToLink, gccVer )
 	libsToLink = libsToLink or {}
 	-- Check to make sure that the pkg is valid.
 	assert( type( pkg ) == "table", "Param1:pkg type missmatch, should be a table." )
@@ -166,10 +178,10 @@ function boost.Configure( pkg, libsToLink )
 		-- Set Boost libraries to link.
 		-- boost.LibName( targetName, boostVer, isDebug )
 		local libs = {}
-		for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, true ) ) end
+		for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, true, gccVer ) ) end
 		table.insert( pkg.config["Debug"].links, libs )
 		libs = {}
-		for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v ) ) end
+		for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, false, gccVer ) ) end
 		table.insert( pkg.config["Release"].links, libs )
 	end
 end
