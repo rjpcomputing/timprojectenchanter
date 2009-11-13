@@ -35,13 +35,14 @@ addoption( "wx-shared", "Link against wxWidgets as a shared library" )
 wx = {}
 
 ---	Configure a C/C++ package to use wxWidgets
---	wx.Configure( package, wxVer = "28" )
-function wx.Configure( package, wxVer )
+--	wx.Configure( package, shouldSetTarget = true, wxVer = "28" )
+function wx.Configure( package, shouldSetTarget, wxVer )
 	-- Check to make sure that the package is valid.
 	assert( type( package ) == "table" )
 	assert( package.name, "Must specify a 'package.name' before calling ConfigureWxWidgets()" )
 
 	-- Set the default values.
+	if shouldSetTarget == nil then shouldSetTarget = true end
 	local targetName = package.name
 	local wx_ver = wxVer or "28"
 
@@ -191,7 +192,7 @@ function wx.Configure( package, wxVer )
 		table.insert( package.defines, { "__WXMSW__" } )
 
 		-- Set the targets.
-		if string.len( package.target or "" ) <= 0 then
+		if shouldSetTarget then
 			if not ( package.kind == "winexe" or package.kind == "exe" ) then
 				if string.find( target or "", ".*-gcc" ) or target == "gnu" then
 					if options["unicode"] then
@@ -231,9 +232,11 @@ function wx.Configure( package, wxVer )
 		table.insert( package.defines, "__WXGTK__" )
 
 		-- Set the targets.
-		if not ( package.kind == "winexe" or package.kind == "exe" ) then
-			package.config["Debug"].target = wx.LibName( targetName, wxVer, true )	--"`wx-config --debug=yes --basename`_"..targetName.."-`wx-config --release`"
-			package.config["Release"].target = wx.LibName( targetName, wxVer )	--"`wx-config --basename`_"..targetName.."-`wx-config --release`"
+		if shouldSetTarget then
+			if not ( package.kind == "winexe" or package.kind == "exe" ) then
+				package.config["Debug"].target = wx.LibName( targetName, wxVer, true )	--"`wx-config --debug=yes --basename`_"..targetName.."-`wx-config --release`"
+				package.config["Release"].target = wx.LibName( targetName, wxVer )	--"`wx-config --basename`_"..targetName.."-`wx-config --release`"
+			end
 		end
 	end
 end
