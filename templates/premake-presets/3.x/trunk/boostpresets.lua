@@ -40,14 +40,14 @@ boost = {}
 --	TODO: Make this more flexable.
 --	@param gccVer [DEF] {string} The version of GCC that you are building for.
 --		Make sure that you leave the '.' out of the string. (i.e. "44" not "4.4")
---		Defaults to "43" on Windows and "42" on Linux.
+--		Defaults to "43" on Windows and "44" on Linux.
 --	@return {string} String that contains the Boost specific target name.
 function boost.GetToolsetName( gccVer )
 	local toolsetName = ""
 	if windows then
 		gccVer = gccVer or "43"
 	else
-		gccVer = gccVer or "42"
+		gccVer = gccVer or "44"
 	end
 
 	if target == "vs2003" then
@@ -153,15 +153,11 @@ function boost.Configure( pkg, libsToLink, gccVer )
 		pkg.libpaths				= pkg.libpaths or {}
 		pkg.defines					= pkg.defines or {}
 		pkg.buildoptions			= pkg.buildoptions or {}
-		if string.find( target or "", ".*-gcc" ) then
-			table.insert( pkg.buildoptions, { "-isystem $(BOOST_ROOT)" } )
-		elseif target == "gnu" then
-			table.insert( pkg.buildoptions, { "-isystem \"$(BOOST_ROOT)\"" } )
-		else
-			table.insert( pkg.includepaths, { "$(BOOST_ROOT)" } )
-		end
+
+		AddSystemPath( pkg, "$(BOOST_ROOT)" )
+
 		table.insert( pkg.libpaths, { "$(BOOST_ROOT)/lib" } )
-		table.insert( pkg.defines, { "_WIN32_WINNT=0x0501" } )	--(i.e. Windows XP target)
+		table.insert( pkg.defines, { "_WIN32_WINNT=0x0500" } )	--(i.e. Windows 2000 target)
 		--(the following line prevents in boost: socket_types.hpp(27) : fatal error C1189: #error :  WinSock.h has already been included)
 		table.insert( pkg.defines, { "WIN32_LEAN_AND_MEAN" } )
 	end
@@ -178,10 +174,15 @@ function boost.Configure( pkg, libsToLink, gccVer )
 		-- Set Boost libraries to link.
 		-- boost.LibName( targetName, boostVer, isDebug )
 		local libs = {}
-		for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, true, gccVer ) ) end
-		table.insert( pkg.config["Debug"].links, libs )
-		libs = {}
-		for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, false, gccVer ) ) end
-		table.insert( pkg.config["Release"].links, libs )
+		if windows then
+			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, true, gccVer ) ) end
+			table.insert( pkg.config["Debug"].links, libs )
+			libs = {}
+			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, false, gccVer ) ) end
+			table.insert( pkg.config["Release"].links, libs )
+		else
+			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, false, gccVer ) ) end
+			table.insert( pkg.links, libs )
+		end
 	end
 end

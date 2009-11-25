@@ -24,14 +24,14 @@ function unittest.Configure( pkg )
 	local pkgName = pkg.name
 
 	-- Add the options help.
-	addoption( pkgName:lower().."-tests", "Enable "..pkgName.." tests to run." )
+	addoption( pkgName:lower() .."-tests", "Enable "..pkgName.." tests to run." )
 
 	-- Add the package to the packages to test.
 	if options[pkgName:lower().."-tests"] then
 		table.insert( unittest.m_testPackages, pkgName )
 		-- Convert an "executable" type to a static library so it can be linked
 		-- to by the test runner.
-		if pkg.kind == "exe" or pkg.kind == "winexe" then
+		if pkg.kind == "exe" or pkg.kind == "winexe" or pkg.kind == "dll" then
 			pkg.kind = "lib"
 		end
 	end

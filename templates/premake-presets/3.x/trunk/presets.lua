@@ -61,6 +61,7 @@ end
 --											  (VC) { "seh-exceptions", "no-64bit-checks" }
 --		package.buildoptions				= (GCC) { "-W", "-Wno-unknown-pragmas", "-Wno-deprecated", "-fno-strict-aliasing"[, "-mthreads"] }
 --		package.linkoptions					= (GCC/Windows) { ["-mthreads"] }
+--											  (Linux) { ["-fPIC"] }
 --		package.defines						= { ["UNICODE", "_UNICODE"] }
 --											  (Windows) { "_WIN32", "WIN32", "_WINDOWS" }
 --											  (VC) { "_CRT_SECURE_NO_DEPRECATE" }
@@ -225,6 +226,10 @@ function Configure( pkg )
 		local linLibs							= { "pthread", "dl", "m" }
 		table.insert( pkg.config["Release"].links, linLibs )
 		table.insert( pkg.config["Debug"].links, linLibs )
+		-- lib is only needed because Premake automatically adds the -fPIC to dlls
+		if ( "lib" == pkg.kind ) then
+			table.insert( pkg.buildoptions, { "-fPIC" } )
+		end
 	else																-- MACOSX
 	end
 end
@@ -237,6 +242,23 @@ function EnableOption( name )
 		options[name] = nil
 	else
 		options[name] = "yes"
+	end
+end
+
+---	Explicitly disable an option
+--	@param name The name of the option to disable
+function DisableOption( name )
+	options[name] = nil
+end
+
+-- Adds path to package (pkg) as a system path in gcc to warnings are ignored
+function AddSystemPath( pkg, path )
+	if string.find( target or "", ".*-gcc" ) then
+		table.insert( pkg.buildoptions, { "-isystem " .. path } )
+	elseif target == "gnu" then
+		table.insert( pkg.buildoptions, { "-isystem \"" .. path .. "\"" } )
+	else
+		table.insert( pkg.includepaths, { path } )
 	end
 end
 
