@@ -1,9 +1,9 @@
 -- ----------------------------------------------------------------------------
 --	Author:		Ryan Pusztai <rjpcomputing@gmail.com>
---	Date:		07/22/2009
---	Version:	1.20
+--	Date:		03/26/2010
+--	Version:	1.21
 --
---	Copyright (C) 2008-2009 Ryan Pusztai
+--	Copyright (C) 2008-2010 Ryan Pusztai
 --
 --	Permission is hereby granted, free of charge, to any person obtaining a copy
 --	of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,8 @@
 -- Package options
 addoption( "boost-shared", "Link against Boost as a shared library" )
 addoption( "boost-single-threaded", "Link against Boost using a single threaded runtime" )
+addoption( "boost-link-debug", "Link against the debug version in Debug configuration. Normally you link against the release version no matter the configuration." )
+addoption( "boost-force-compiler-version", "Force the compiler version to be included in the file name" )
 
 -- Namespace
 boost = {}
@@ -40,12 +42,12 @@ boost = {}
 --	TODO: Make this more flexable.
 --	@param gccVer [DEF] {string} The version of GCC that you are building for.
 --		Make sure that you leave the '.' out of the string. (i.e. "44" not "4.4")
---		Defaults to "43" on Windows and "44" on Linux.
+--		Defaults to "44" on Windows and "44" on Linux.
 --	@return {string} String that contains the Boost specific target name.
 function boost.GetToolsetName( gccVer )
 	local toolsetName = ""
 	if windows then
-		gccVer = gccVer or "43"
+		gccVer = gccVer or "44"
 	else
 		gccVer = gccVer or "44"
 	end
@@ -84,7 +86,7 @@ function boost.LibName( libraryName, isDebug, gccVer )
 
 	-- Toolset - target/compiler.
 	local toolset = ""
-	if ( not linux ) then
+	if windows or options["boost-force-compiler-version"] then
 		toolset = "-" .. boost.GetToolsetName( gccVer )
 	end
 	--print( "Toolset: ", toolset )
@@ -116,7 +118,7 @@ end
 --	@param libsToLink {table} [DEF] Table that contains the names of the Boost libraries needed to build.
 --		Defaults to an empty table.
 --	@param gccVer {string} [DEF] The version of GCC that you are building for.
---		Defaults to "43" on Windows and "42" on Linux.
+--		Defaults to "44" on Windows and "44" on Linux.
 --
 --	Options supported:
 --		boost-shared - "Link against Boost as a shared library"
@@ -172,9 +174,8 @@ function boost.Configure( pkg, libsToLink, gccVer )
 	-- Only add link libraries if not VC.
 	if not string.find( target or "", "vs*" ) then
 		-- Set Boost libraries to link.
-		-- boost.LibName( targetName, boostVer, isDebug )
 		local libs = {}
-		if windows then
+		if options["boost-link-debug"] then
 			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, true, gccVer ) ) end
 			table.insert( pkg.config["Debug"].links, libs )
 			libs = {}

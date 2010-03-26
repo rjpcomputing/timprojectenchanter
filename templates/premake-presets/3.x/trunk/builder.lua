@@ -1,10 +1,10 @@
 #!/usr/bin/env lua
 -- ----------------------------------------------------------------------------
 --	Author:		Ryan Pusztai <rjpcomputing@gmail.com>
---	Date:		11/24/2009
---	Version:	1.00
+--	Date:		02/09/2010
+--	Version:	1.10
 --
---	Copyright (C) 2009 Ryan Pusztai
+--	Copyright (C) 2010 Ryan Pusztai
 --
 --	Permission is hereby granted, free of charge, to any person obtaining a copy
 --	of this software and associated documentation files (the "Software"), to deal
@@ -30,23 +30,10 @@
 --        Find it on \\znas2\electrical\User\Tester\rpusztai\Code\IDEs\Visual Studio\VS9
 -- ----------------------------------------------------------------------------
 require( "lfs" )
+require( "pl.lapp" )
+require( "pl.path" )
+require( "pl.dir" )
 
---[=[ Check for help commandline argument.
-if arg[1] == "help" or arg[1] == "--help" or arg[1] == "-h" then
-	print( "builder.lua - CI Build helper v2.00" )
-	print( "Usage: lua builder.lua [target [config [buildfile_options]]] | help" )
-	print( "", "target",	"What builder (Compiler/IDE) to invoke." )
-	print( "", "config",	"What configuration to build. Available options are 'Release' and 'Debug'." )
-	print( "", "buildfile_options",	"Options to pass to Premake to control project file generation. Ex: '--verbose'." )
-	print( "", "help",		"Displays this message and exits" )
-	return
-end
-
-local target = arg[1] or "gnu"
-target = target:lower()
-local config = arg[2] or "Release"
-local buildfile_options = arg[3] or ""
-]=]
 -- HELPER FUNCTIONS -----------------------------------------------------------
 --
 
@@ -64,150 +51,14 @@ local function GetNumberOfProcessors()
 	local numOfProcessors = "2"
 
 	if IsWindows() then
-		numOfProcessors = os.getenv( "NUMBER_OF_PROCESSOR" ) or numOfProcessors
+		numOfProcessors = os.getenv( "NUMBER_OF_PROCESSORS" ) or numOfProcessors
 	else
 		local procHandle = io.popen( "grep -c processor /proc/cpuinfo" )
-		numOfProcessors = procHandle:read( "*a" ) or numOfProcessors
+		numOfProcessors = procHandle:read( "*n" ) or numOfProcessors
 		procHandle:close()
 	end
 
 	return numOfProcessors
-end
-
--- Lua command line option parser.
--- Interface based on Pythons optparse.
--- http://docs.python.org/lib/module-optparse.html
--- (c) 2008 David Manura, Licensed under the same terms as Lua (MIT license)
---
--- To be used like this:
--- t={usage="<some usage message>", version="<version string>"}
--- op=OptionParser(t)
--- op=add_option{"<opt>", action=<action>, dest=<dest>, help="<help message for this option>"}
---
--- with :
---   <opt> the option string to be used (can be anything, if one letter opt, then should be -x val, more letters: -xy=val )
---   <action> one of
---   - store: store in options as key, val
---   - store_true: stores key, true
---   - store_false: stores key, false
---   <dest> is the key under which the option is saved
---
--- options,args = op.parse_args()
---
--- now options is the table of options (key, val) and args is the table with non-option arguments.
--- You can use op.fail(message) for failing and op.print_help() for printing the usage as you like.
-
-local function OptionParser(t)
-	local usage = t.usage
-	local version = t.version
-
-	local o = {}
-	local option_descriptions = {}
-	local option_of = {}
-
-	function o.fail(s) -- extension
-		io.stderr:write(s .. '\n')
-		os.exit(1)
-	end
-
-	function o.add_option( optdesc )
-		option_descriptions[#option_descriptions + 1] = optdesc
-		for _,v in ipairs( optdesc ) do
-			option_of[v] = optdesc
-		end
-	end
-
-	function o.parse_args()
-		-- expand options (e.g. "--input=file" -> "--input", "file")
-		local arg = { unpack( arg ) }
-		for i=#arg,1,-1 do local v = arg[i]
-			local flag, val = v:match( '^(%-%-%w+)=(.*)' )
-			if flag then
-				arg[i] = flag
-				table.insert( arg, i+1, val )
-			end
-		end
-
-		local options = {}
-		local args = {}
-		local i = 1
-		while i <= #arg do local v = arg[i]
-			local optdesc = option_of[v]
-			if optdesc then
-				local action = optdesc.action
-				local val
-
-				if action == 'store' or action == nil then
-					i = i + 1
-					val = arg[i]
-					if not val then o.fail('option requires an argument ' .. v) end
-				elseif action == 'store_true' then
-					val = true
-				elseif action == 'store_false' then
-					val = false
-				end
-
-				options[optdesc.dest] = val
-			else
-				if v:match('^%-') then o.fail('invalid option ' .. v) end
-				args[#args+1] = v
-			end
-				i = i + 1
-		end
-
-		if options.help then
-			o.print_help()
-			os.exit()
-		end
-
-		if options.version then
-			io.stdout:write(t.version .. "\n")
-			os.exit()
-		end
-
-		return options, args
-	end
-
-	local function flags_str(optdesc)
-		local sflags = {}
-		local action = optdesc.action
-		for _,flag in ipairs(optdesc) do
-			local sflagend
-			if action == nil or action == 'store' then
-				local metavar = optdesc.metavar or optdesc.dest:upper()
-				sflagend = #flag == 2 and ' ' .. metavar
-									  or  '=' .. metavar
-			else
-				sflagend = ''
-			end
-
-			sflags[#sflags+1] = flag .. sflagend
-		end
-
-		return table.concat(sflags, ', ')
-	end
-
-	function o.print_help()
-		io.stdout:write("Usage: " .. usage:gsub('%%prog', arg[0]) .. "\n")
-		io.stdout:write("\n")
-		io.stdout:write("Options:\n")
-		local pad = 0
-		for _,optdesc in ipairs(option_descriptions) do
-			pad = math.max( pad, #flags_str(optdesc) )
-		end
-		for _,optdesc in ipairs( option_descriptions ) do
-			io.stdout:write("  " .. flags_str( optdesc ) .. string.rep(' ', pad - #flags_str(optdesc)) .. "  " .. optdesc.help .. "\n")
-		end
-	end
-
-	o.add_option{ "--help", action = "store_true", dest = "help",
-					help = "show this help message and exit" }
-	if t.version then
-		o.add_option{ "--version", action = "store_true", dest = "version",
-						help = "output version info." }
-	end
-
-	return o
 end
 
 ---	Looks if a single key is in a table.
@@ -305,16 +156,29 @@ local function FindFirstFile( path, pattern )
 	return nil
 end
 
+---	Removes all files in the current working directory using the supplied pattern.
+--	@param pattern The file pattern to remove.
+local function RemoveAll( pattern )
+	local files = pl.dir.getfiles( ".", pattern )
+	for _, file in ipairs( files )do
+		print( "Cleaning old file:", file )
+		os.remove( file )
+	end
+end
+
 -- BUILDER FUNCTIONS ----------------------------------------------------------
 --
 ---	Launch Premake to generate the project files.
-local function GenerateProjectFiles( tget )
+local function GenerateProjectFiles( tget, args )
 	if type( tget ) ~= "string" then
 		error( "bad argument #1 to GenerateProjectFiles. (Expected string but recieved "..type( tget )..")" )
 	end
+  if type( args ) ~= "string" then
+		error( "bad argument #2 to GenerateProjectFiles. (Expected string but recieved "..type( args )..")" )
+	end
 
-	local premakeRet = os.execute( "premake "..buildfile_options.." --target "..tget )
-	--print( "Premake process exited with code "..( premakeRet or "<nil>" ) )
+	local premakeRet = os.execute( "premake --target " .. tget .. " " .. args )
+
 	if premakeRet ~= 0 then
 		print( string.format( "Premake error (%i) occured.", premakeRet ) )
 		os.exit( premakeRet )
@@ -322,22 +186,36 @@ local function GenerateProjectFiles( tget )
 	print( "" )
 end
 
-local function ExecuteGnuBuilder( cfg )
-	print( "Make Builder invoked." ); io.stdout:flush()
-	--io.stdout:write( "Make Builder invoked.\n" )
-	--io.stdout:flush()
+local function ExecuteGnuBuilder( cfg, shouldClean )
+	-- Check parameters
 	if type( cfg ) ~= "string" then
 		error( "bad argument #1 to ExecuteGnuBuilder. (Expected string but recieved "..type( cfg )..")" )
 	end
-	local multiProccessorFlag = " -j "..GetNumberOfProcessors()
+	shouldClean = shouldClean or false
+	
+	print( "Make Builder invoked." ); io.stdout:flush()
+	
 	-- Launch make to build
-	local makeCmd = "make CONFIG="..cfg..multiProccessorFlag
+	local make = "make"
 	if IsWindows() then
-		makeCmd = "mingw32-make CONFIG="..cfg..multiProccessorFlag
+		make = "mingw32-make"
 	end
+	
+	-- Launch make to clean
+	if shouldClean then
+		local cleanCmd = string.format( "%s CONFIG=%s clean", make, cfg )
+		print( cleanCmd ); io.stdout:flush()
+		local makeRet = os.execute( cleanCmd )
+		--print( "VS2005 clean process exited with code "..( vsRet or "<nil>" ) )
+		if makeRet ~= 0 then
+			print( string.format( "Make clean error (%i) occured. Converted exit code to 1", makeRet ) )
+			os.exit( 1 )
+		end
+	end
+	
+	-- Luanch make to build
+	local makeCmd = string.format( "%s -j %s CONFIG=%s", make, GetNumberOfProcessors(), cfg )
 	print( makeCmd ); io.stdout:flush()
-	--io.stdout:write( makeCmd.."\n" )
-	--io.stdout:flush()
 	local makeRet = os.execute( makeCmd )
 	--print( "Make process exited with code "..( makeRet or "<nil>" ) )
 	if makeRet ~= 0 then
@@ -346,11 +224,12 @@ local function ExecuteGnuBuilder( cfg )
 	end
 end
 
-local function ExecuteVs2005Builder( cfg )
+local function ExecuteVs2005Builder( cfg, shouldClean )
 	-- Check parameters
 	if type( cfg ) ~= "string" then
-		error( "bad argument #1 to ExecuteVs2008Builder. (Expected string but recieved "..type( cfg )..")" )
+		error( "bad argument #1 to ExecuteVs2005Builder. (Expected string but recieved "..type( cfg )..")" )
 	end
+	shouldClean = shouldClean or false
 
 	print( "VS2005 Builder invoked." ); io.stdout:flush()
 
@@ -368,28 +247,41 @@ local function ExecuteVs2005Builder( cfg )
 
 	-- Find solution file
 	local solutionFile = FindFirstFile( ".", ".sln" )
-	print( "Running solution "..solutionFile ); io.stdout:flush()
-
 	if not solutionFile then
 		error( "No VS2005 solution file found. Make sure the project files are generated." )
 	end
+	print( "Using solution "..solutionFile ); io.stdout:flush()
+	
+	-- Launch vc to clean
+	if shouldClean then
+		print( "Cleaning solution..." ); io.stdout:flush()
+		local cleanCmd = string.format( '""%s" "%s" /clean %s"', vsPath, solutionFile, cfg )
+		local vsRet = os.execute( cleanCmd )
+		--print( "VS2005 clean process exited with code "..( vsRet or "<nil>" ) )
+		if vsRet ~= 0 then
+			print( string.format( "VS2005 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+			os.exit( 1 )
+		end
+	end
 
 	-- Launch vc to build
-	local buildString = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
-	local vsRet = os.execute( buildString )
-	--print( "VS2005 process exited with code "..( vsRet or "<nil>" ) )
+	print( "Building solution..." ); io.stdout:flush()
+	local buildCmd = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
+	local vsRet = os.execute( buildCmd )
+	--print( "VS2005 build process exited with code "..( vsRet or "<nil>" ) )
 	if vsRet ~= 0 then
-		print( string.format( "VS2005 error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+		print( string.format( "VS2005 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
 		os.exit( 1 )
 	end
 end
 
-local function ExecuteVs2008Builder( cfg )
+local function ExecuteVs2008Builder( cfg, shouldClean )
 	-- Check parameters
 	if type( cfg ) ~= "string" then
 		error( "bad argument #1 to ExecuteVs2008Builder. (Expected string but recieved "..type( cfg )..")" )
 	end
-
+	shouldClean = shouldClean or false
+	
 	print( "VS2008 Builder invoked." ); io.stdout:flush()
 
 	-- Determine Visual Studio path
@@ -405,17 +297,30 @@ local function ExecuteVs2008Builder( cfg )
 
 	-- Find solution file
 	local solutionFile = FindFirstFile( ".", ".sln" )
-	print( "Running solution "..solutionFile ); io.stdout:flush()
 	if not solutionFile then
 		error( "No VS2008 solution file found. Make sure the project files are generated." )
 	end
-
+	print( "Using solution "..solutionFile ); io.stdout:flush()
+	
+	-- Launch vc to clean
+	if shouldClean then
+		print( "Cleaning solution..." ); io.stdout:flush()
+		local cleanCmd = string.format( '""%s" "%s" /clean %s"', vsPath, solutionFile, cfg )
+		local vsRet = os.execute( cleanCmd )
+		--print( "VS2008 clean process exited with code "..( vsRet or "<nil>" ) )
+		if vsRet ~= 0 then
+			print( string.format( "VS2008 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+			os.exit( 1 )
+		end
+	end
+	
 	-- Launch vc to build
+	print( "Building solution..." ); io.stdout:flush()
 	local buildString = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
 	local vsRet = os.execute( buildString )
-	--print( "VS2008 process exited with code "..( vsRet or "<nil>" ) )
+	--print( "VS2008 build process exited with code "..( vsRet or "<nil>" ) )
 	if vsRet ~= 0 then
-		print( string.format( "VS2008 error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+		print( string.format( "VS2008 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
 		os.exit( 1 )
 	end
 end
@@ -423,15 +328,23 @@ end
 
 local function ExecuteINNOBuilder( file )
 	print( "INNO Setup Installer Builder invoked." ); io.stdout:flush()
+	-- Get the current working directory so we can restore it after the work is done.
+	local curDir = lfs.currentdir()
 
 	if type( file ) ~= "string" then
 		error( "bad argument #1 to ExecuteINNOBuilder. (Expected string but recieved "..type( file )..")" )
 	end
 
+	-- Change the directory to the installer file directory.
+	lfs.chdir( pl.path.dirname( file ) )
+
 	-- Launch INNO Setup command line compiler to build the installer.
 	local installerCmd = ""
 	if IsWindows() then
-		installerCmd = string.format( [[C:\Program Files\Inno Setup 5\ISCC.exe %q]], file )
+		-- Clean all old installer files.
+		RemoveAll( "*.exe" )
+
+		installerCmd = string.format( [[""C:\Program Files\Inno Setup 5\ISCC.exe" %q"]], pl.path.basename( file ) )
 		print( installerCmd ); io.stdout:flush()
 
 		local installerRet = os.execute( installerCmd )
@@ -439,21 +352,31 @@ local function ExecuteINNOBuilder( file )
 		print( "INNO process exited with code "..( installerRet or "<nil>" ) )
 
 		if installerRet ~= 0 then
+			lfs.chdir( curDir )
 			print( string.format( "INNO error (%i) occured. Converted exit code to 1", installerRet ) )
 			os.exit( 1 )
 		end
 	else
 		print( "Only Windows is supported right now." )
-		return
+		-- Clean all old installer files.
+		RemoveAll( "*.deb" )
 	end
+
+	lfs.chdir( curDir )
 end
 
 local function ExecuteNSISBuilder( file )
 	print( "NSIS Installer Builder invoked." ); io.stdout:flush()
 
+	-- Get the current working directory so we can restore it after the work is done.
+	local curDir = lfs.currentdir()
+
 	if type( file ) ~= "string" then
 		error( "bad argument #1 to ExecuteNSISBuilder. (Expected string but recieved "..type( file )..")" )
 	end
+
+	-- Change the directory to the installer file directory.
+	lfs.chdir( pl.path.dirname( file ) )
 
 	-- Launch NSIS command line compiler to build the installer.
 	local installerCmd = ""
@@ -466,132 +389,83 @@ local function ExecuteNSISBuilder( file )
 		print( "NSIS process exited with code "..( installerRet or "<nil>" ) )
 
 		if installerRet ~= 0 then
+			lfs.chdir( curDir )
 			print( string.format( "NSIS error (%i) occured. Converted exit code to 1", installerRet ) )
 			os.exit( 1 )
 		end
 	else
 		print( "Only Windows is supported right now." )
-		return
 	end
+
+	lfs.chdir( curDir )
 end
 
-function LoadConfigurationFile( file )
-	if FileExists( file ) then
-		dofile( file )
-	else
-		print( "WARNING: Did not find a configuration file, only the defaults will be used." )
-	end
-end
-
--- Main builder class.
-local Builder =
+Targets =
 {
-	configurations =
-	{
-		["GCC.Release"] =
-		{
-			target				= "gnu",
-			config				= "Release",
-			buildFileOptions	= "",
-			installer			= "",
-			installerSourceFile	= "",
-		},
-		["GCC.Debug"] =
-		{
-			target				= "gnu",
-			config				= "Debug",
-			buildFileOptions	= "",
-			installer			= "",
-			installerSourceFile	= "",
-		},
-		["VS2005.Release"] =
-		{
-			target				= "vs2005",
-			config				= "Release",
-			buildFileOptions	= "",
-			installer			= "",
-			installerSourceFile	= "",
-		},
-		["VS2005.Debug"] =
-		{
-			target				= "vs2005",
-			config				= "Debug",
-			buildFileOptions	= "",
-			installer			= "",
-			installerSourceFile	= "",
-		},
-		["VS2008.Release"] =
-		{
-			target				= "vs2008",
-			config				= "Release",
-			buildFileOptions	= "",
-			installer			= "",
-			installerSourceFile	= "",
-		},
-		["VS2008.Debug"] =
-		{
-			target				= "vs2008",
-			config				= "Debug",
-			buildFileOptions	= "",
-			installer			= "",
-			installerSourceFile	= "",
-		},
-	},
-	-- Add more installers here to make them available as builders.
-	installerBuilders =
-	{
-		inno	= ExecuteINNOBuilder,
-		nsis	= ExecuteNSISBuilder,
-	},
-	-- Add more targets here to make them available as builders.
-	targetBuilders =
-	{
-		gnu		= ExecuteGnuBuilder,
-		vs2005	= ExecuteVs2005Builder,
-		vs2008	= ExecuteVs2008Builder,
-	}
+  gnu = ExecuteGnuBuilder,
+  vs2005 = ExecuteVs2005Builder,
+  vs2008 = ExecuteVs2008Builder
 }
 
--- MAIN ENTRY POINT ------------------------------------------------------------
---
+Installers =
+{
+  inno = ExecuteINNOBuilder,
+  nsis = ExecuteNSISBuilder
+}
+
 function main()
-	-- Setup the build options.
-	op = OptionParser{ usage="builder.lua config [settings_file] | --help", version="1.00-Alpha" }
-	op.add_option{ "--file", action = "store", dest="settings_file", help="Path to the settings file to use. (Defaults to BuildSettings.lua)" }
-	local options, args = op.parse_args()
+	local args = pl.lapp [[
+	Builds the current project. Run from the root level.
 
-	-- Check to make sure the required arguments are
-	if #args == 0 then
-		local availableConfigurations = {}
-		for k, _ in pairs( Builder.configurations ) do table.insert( availableConfigurations, k ) end
-		error( "No configuration was supplied. Please make sure to specify a configuration to run. Available built-in configurations are "..table.concat( (availableConfigurations or {} ), ", " ) )
+	-t,--target         (string)            One of the following: vs2005, vs2008, or gnu.
+	-b,--build          (default Release)   Project-specific build configuration, usually Debug or Release.
+	-i,--installer      (default none)      One of the following: inno or nsis.
+	-f,--installerfile  (default none)      The installer source file to pass to the installer, if needed.
+	-p,--premake        (default none)      Extra arguments passed on to premake.
+	-c,--clean                              Clean project sources before building.
+	]]
+
+	-- Setup the target
+	local target = args.target or ""
+	if not ContainsKey( Targets, target ) then
+		error( "Invalid target: " .. target )
 	end
 
-for k, v in pairs( args ) do print( "Script arguments:" ); print( "", k, v ) end
-for k, v in pairs( options ) do print( "Options:" ); print( "", k, v ) end
+	-- Setup the build configuration
+	local build = args.build or ""
+	
+	-- Setup if the build should clean first
+	local shouldClean = args.clean
 
-	-- Load the configuration file
-	local config = LoadConfigurationFile( options.file or "BuildSettings.lua" )
-
-	-- Check to see if the configuration supplied exists.
-	if not ContainsKey( Builder.configurations, args[1] ) then
-		local availableConfigurations = {}
-		for k, _ in pairs( Builder.configurations ) do table.insert( availableConfigurations, k ) end
-		error( "No matching configuration found. Check to make sure that you spelled and passed the correct one on the command line. Available configurations are "..table.concat( (availableConfigurations or {} ), ", " ) )
+	-- Setup the installer support
+	local installer = nil
+	local installerFile = nil
+	if args.installer and args.installer ~= "none" then
+		installer = args.installer or ""
+		if not ContainsKey( Installers, installer ) then
+		  error( "Invalid installer: " .. installer )
+		end
+		if args.installerfile and args.installerfile ~= "none" then
+		  installerFile = args.installerfile
+		end
 	end
 
-	-- Check to see if it is an available builder.
-	if not ContainsKey( Builder.targetBuilders, target ) then
-		local availableTargets = {}
-		for k, _ in pairs( Builder.targetBuilders ) do table.insert( availableTargets, k ) end
-		error( "Unsupported target specified. Available targets are "..table.concat( availableTargets, ", " ) )
+	-- Setup the Premake extra arguments
+	local premakeArgs = ""
+	if args.premake and args.premake ~= "none" then
+	premakeArgs = args.premake
 	end
 
-	-- Generate the required build files.
-	--GenerateProjectFiles( target )
+	-- Generate the project files
+	GenerateProjectFiles( target, premakeArgs )
 
-	-- Launch the correct Builder.
-	--targetBuilders[target]( config )
+	-- Actually build project
+	Targets[ target ]( build, shouldClean )
+
+	-- Optionally build the installer
+	if installer then
+		Installers[ installer ]( installerFile )
+	end
 end
 
 if not _LEXECUTOR then

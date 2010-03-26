@@ -30,9 +30,10 @@
 
 -- OPTIONS -------------------------------------------------------------------
 --
-addoption( "dynamic-runtime", "Use the dynamicly loadable version of the runtime." )
+addoption( "dynamic-runtime", "Use the dynamically loadable version of the runtime." )
 addoption( "unicode", "Use the Unicode character set." )
 addoption( "force-32bit", "Forces GCC to build as a 32bit only" )
+addoption( "release-with-debug-symbols", "Adds Debug symbols to the release build." )
 if windows then
 	addoption( "disable-mingw-mthreads", "Disables the MinGW specific -mthreads compile option." )
 end
@@ -139,10 +140,14 @@ function Configure( pkg )
 	end
 
 	if options["dynamic-runtime"] then
-		table.insert( pkg.config["Release"].buildflags, { "no-symbols", "optimize" } )
+		table.insert( pkg.config["Release"].buildflags, { "optimize" } )
 	else
 		table.insert( pkg.config["Debug"].buildflags, { "static-runtime" } )
-		table.insert( pkg.config["Release"].buildflags, { "static-runtime", "no-symbols", "optimize" } )
+		table.insert( pkg.config["Release"].buildflags, { "static-runtime", "optimize" } )
+	end
+
+	if not options["release-with-debug-symbols"] then
+		table.insert( pkg.config["Release"].buildflags, { "no-symbols" } )
 	end
 
 	-- Defined Symbols
@@ -166,6 +171,7 @@ function Configure( pkg )
 	-- COMPILER SPECIFIC SETUP ----------------------------------------------------
 	--
 	pkg.buildoptions							= pkg.buildoptions or {}
+	pkg.linkoptions								= pkg.linkoptions or {}
 	if target == "gnu" or string.find( target or "", ".*-gcc" ) then
 		table.insert( pkg.buildoptions, { "-W", "-Wno-unknown-pragmas", "-Wno-deprecated", "-fno-strict-aliasing" } )
 		if windows then
@@ -196,6 +202,11 @@ function Configure( pkg )
 		if options["unicode"] then
 			pkg.objdir							= "obju"
 		end
+
+		if options["release-with-debug-symbols"] then
+			table.insert( pkg.config["Release"].buildoptions, { "/Zi" } )
+			table.insert( pkg.config["Release"].linkoptions, { "/DEBUG" } )
+		end
 	end
 
 	if target == "vs2003" then
@@ -206,6 +217,11 @@ function Configure( pkg )
 		-- Set object output directory.
 		if options["unicode"] then
 			pkg.objdir							= "obju"
+		end
+
+		if options["release-with-debug-symbols"] then
+			table.insert( pkg.config["Release"].buildoptions, { "/Zi" } )
+			table.insert( pkg.config["Release"].linkoptions, { "/DEBUG" } )
 		end
 	end
 
@@ -218,7 +234,7 @@ function Configure( pkg )
 	if windows then														-- WINDOWS
 		-- Maybe add "*.manifest" later, but it seems to get in the way.
 		table.insert( pkg.files, { matchfiles( "*.rc" ) } )
-		table.insert( pkg.defines, { "_WIN32", "WIN32", "_WINDOWS" } )
+		table.insert( pkg.defines, { "_WIN32", "WIN32", "_WINDOWS", "NOMINMAX" } )
 		local winLibs 							= { "psapi", "ws2_32", "version" }
 		table.insert( pkg.config["Release"].links, winLibs )
 		table.insert( pkg.config["Debug"].links, winLibs )
@@ -255,8 +271,10 @@ end
 function AddSystemPath( pkg, path )
 	if string.find( target or "", ".*-gcc" ) then
 		table.insert( pkg.buildoptions, { "-isystem " .. path } )
+		pkg.includepaths[path] = nil -- remove from includes to make system path work properly
 	elseif target == "gnu" then
 		table.insert( pkg.buildoptions, { "-isystem \"" .. path .. "\"" } )
+		pkg.includepaths[path] = nil -- remove from includes to make system path work properly
 	else
 		table.insert( pkg.includepaths, { path } )
 	end
@@ -266,13 +284,33 @@ end
 --	@param tbl Table to seach in.
 --	@param value String of the value to find in tbl.
 local function iContainsEntry( tbl, value )
-	for _, val in ipairs( tbl ) do
-		if type( val ) == "table" then
+	if type( tbl ) == "table" then
+		for _, val in pairs( tbl ) do			
 			if true == iContainsEntry( val, value ) then
+				return true
+			end
+		end
+	else
+		if tbl == value then
+			return true
+		end
+	end
+
+	return false
+end
+
+---	Removes a single value in a table.
+--	@param tbl Table to seach in.
+--	@param value String of the value to remove in tbl.
+local function iRemoveEntry( tbl, value )
+	for i, val in ipairs( tbl ) do
+		if type( val ) == "table" then
+			if true == iRemoveEntry( val, value ) then
 				return true
 			end
 		else
 			if val == value then
+				table.remove( tbl, i )
 				return true
 			end
 		end
@@ -296,7 +334,8 @@ end
 --		}
 --	}
 --	$WCREV$ will be replaced by svn revision of working copy by tool SubWCRev
-function MakeVersion( pkg, nameOfFile )
+function MakeVersion( pkg, nameOfFile, workingDirectory )
+	workingDirectory = workingDirectory or "./"
 	local svnwcrev
 	if windows then
 		svnwcrev = "C:/Program Files/TortoiseSVN/bin/SubWCRev.exe"
@@ -309,12 +348,17 @@ function MakeVersion( pkg, nameOfFile )
 		svnwcrev = "svnwcrev"
 	end
 
-	local cmd = '"' .. svnwcrev .. '" ./ ' .. nameOfFile .. '.template ' .. nameOfFile
+	local nameOfTemplate = nameOfFile .. '.template'
+	local cmd = '"' .. svnwcrev .. '" ' .. workingDirectory .. ' ' .. nameOfTemplate .. ' ' .. nameOfFile
 	table.insert( pkg.prebuildcommands, { cmd } )
 	-- Check if the file is already added to the package's file table.
 	if not iContainsEntry( pkg.files, nameOfFile ) then
 		-- Only add it because it isn't already there.
 		io.popen( cmd )
 		table.insert( pkg.files, nameOfFile )
+	end
+	-- add template file to project so the template can be easily updated
+	if not iContainsEntry( pkg.files, nameOfTemplate ) then
+		table.insert( pkg.files, nameOfTemplate )
 	end
 end
