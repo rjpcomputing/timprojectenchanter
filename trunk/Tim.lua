@@ -29,16 +29,16 @@
 dofile( "Settings.lua" )
 require( "wx" )
 require( "lfs" )
-require( "luapp" )
+--require( "luapp" )
 require( "Resources" )
-require( "SourceControl" )
+require( "vcs" )
 local preprocess = require( "luapp" ).preprocess
 
 -- ----------------------------------------------------------------------------
 -- CONSTANTS
 -- ----------------------------------------------------------------------------
 local APP_NAME			= "Tim the Project Enchanter"
-local APP_VERSION		= "1.00"
+local APP_VERSION		= "1.01"
 local ID_IDCOUNTER		= nil
 
 -- ----------------------------------------------------------------------------
@@ -133,7 +133,7 @@ local TimGUI =
 	-- GUI control variables
 	--
 	frame								= nil,		-- The wxFrame of the program
-    panel								= nil,		-- The main wxPanel child of the wxFrame
+	panel								= nil,		-- The main wxPanel child of the wxFrame
 	sourceControlLocationTextCtrl		= nil,
 	sourceControlOpenButton				= nil,
 	projectNameTextCtrl					= nil,
@@ -304,7 +304,7 @@ function TimGUI.OnAbout( event )
 	info:SetIcon( Resources.GetLargeAppIcon() )
 	info:SetWebSite( "http://timprojectenchanter.googlecode.com" )
     info:SetDescription( "Universal project wizard that uses a simple template engine to aid in new project creation." )
-    info:SetCopyright( "Copyright (c) RJP Computing 2009" )
+    info:SetCopyright( "Copyright (c) RJP Computing 2010" )
 
     wx.wxAboutBox(info)
 end
@@ -326,28 +326,29 @@ function TimGUI.OnCreateProjectClicked( event )
 	print( 'Template Location:', template )
 	]]
 
+	local sc = vcs.VersionControlSystem:new( { projectName = projName, localPath = path, destinationPath = scPath, templatePath = template } )
 	-- Create a new project from the template
 	--
 	print( "-- Export "..template )
-	print( SourceControl.Export( template, path ) )
+	print( sc:Export() )
 
 	print( "-- Make '"..path.."' a working copy" )
-	print( SourceControl.MakeWorkingCopy( scPath, path ) )
+	print( sc:MakeWorkingCopy() )
 
 	print( "-- Fill in the template" )
-	TemplateReplace( { ProjectName = TimGUI.projectNameTextCtrl:GetValue() }, path )
+	TemplateReplace( { ProjectName = TimGUI.projectNameTextCtrl:GetValue() }, path .. "/" .. projName )
 
 	print( "-- Add files" )
-	print( SourceControl.AddFiles( path ) )
+	print( sc:AddFiles() )
 
 	print( "-- Add the externals" )
-	print( SourceControl.SetProperty( "svn:externals", path ) )
+	print( sc:SetProperty( "svn:externals" ) )
 
 	print( "-- Commit to "..scPath )
-	print( SourceControl.Commit( path, scPath ) )
+	print( sc:Commit() )
 
 	print( "-- Update "..path.." to complete and get the latest changes" )
-	print( SourceControl.Update( path ) )
+	print( sc:Update() )
 end
 
 function TimGUI.OnSourceControlOpenClicked( event )
@@ -439,7 +440,7 @@ local function main()
 	-- Local Path
 	local projectOutputStaticText = wx.wxStaticText( TimGUI.panel, wx.wxID_ANY, "Local Path" )
 	fgSizer1:Add( projectOutputStaticText, 0, wx.wxALIGN_CENTER_VERTICAL + wx.wxALIGN_RIGHT + wx.wxTOP + wx.wxBOTTOM + wx.wxLEFT, 5 )
-	TimGUI.projectDestinationDirPicker = wx.wxDirPickerCtrl( TimGUI.panel, TimGUI.ID_PROJECT_DESTINATION_DIR_PICKER ) --, wx.wxEmptyString, "Select a folder", wx.wxDefaultPosition, wx.wxDefaultSize, wx.wxDIRP_DEFAULT_STYLE )
+	TimGUI.projectDestinationDirPicker = wx.wxDirPickerCtrl( TimGUI.panel, TimGUI.ID_PROJECT_DESTINATION_DIR_PICKER, "", "Select a folder", wx.wxDefaultPosition, wx.wxDefaultSize, wx.wxDIRP_DEFAULT_STYLE )
 	-- Set the last path
 	TimGUI.projectDestinationDirPicker:SetPath( AppData.lastLocalPath )
 	fgSizer1:Add( TimGUI.projectDestinationDirPicker, 0, wx.wxALL + wx.wxEXPAND, 5 )

@@ -1,5 +1,5 @@
 dofile( "Settings.lua" )
-require( "SourceControl" )
+require( "vcs" )
 local preprocess = require( "luapp" ).preprocess
 
 local function TemplateReplace( keywords, path )
@@ -67,30 +67,36 @@ local function TemplateReplace( keywords, path )
 	end
 end
 
-path = "../"..arg[1] or "../test7"
---path = "/home/rpusztai/devel/lua/timprojectenchanter/test1"
-scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/"..(arg[1] or "test7").."/trunk"
+local defaultDir = arg[1] or "test15"
+print(vcs)
+table.foreach( vcs, print )
+local projectName = "MyProject"
+local path = "../" .. defaultDir
+local scPath = "http://rjpcomputing.homeip.net/svn/users/rpusztai/tmp/" .. defaultDir .. "/trunk"
+local template = Settings.Templates.wxGUI
 
-print( "-- Export "..Settings.Templates.wxGUI )
-print( SourceControl.Export( Settings.Templates.wxGUI, path ) )
+local sc = vcs.VersionControlSystem:new( {projectName = projectName, localPath = path, destinationPath = scPath, templatePath =  Settings.Templates.wxGUI } )
+
+print( "-- Export "..template )
+print( sc:Export() )
 
 print( "-- Make '"..path.."' a working copy" )
-print( SourceControl.MakeWorkingCopy( scPath, path ) )
+print( sc:MakeWorkingCopy() )
 
 print( "-- Fill in the template" )
-TemplateReplace( { ProjectName = "MyProject" }, path )
+TemplateReplace( { ProjectName = projectName }, path )
 
 print( "-- Add files" )
-print( SourceControl.AddFiles( path ) )
+print( sc:AddFiles() )
 
 print( "-- Add the externals" )
-print( SourceControl.SetProperty( "svn:externals", path ) )
+print( sc:SetProperty( "svn:externals" ) )
 
 print( "-- Commit to "..scPath )
-print( SourceControl.Commit( path, scPath ) )
+print( sc:Commit() )
 
 print( "-- Update "..path )
-print( SourceControl.Update( path ) )
+print( sc:Update() )
 
 --[[
 local params =
