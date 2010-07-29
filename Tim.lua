@@ -310,6 +310,11 @@ function TimGUI.OnAbout( event )
 end
 
 function TimGUI.OnCreateProjectClicked( event )
+	-- Display the wait cursor to show work is being done.
+	wx.wxBeginBusyCursor()
+	wx.wxSafeYield()	-- Disable the controls to show that the project is being created.
+	wx.wxLogStatus( TimGUI.frame, "Project creation started. Please wait...")
+
 	-- Clear the log message
 	TimGUI.logTextCtrl:Clear()
 
@@ -331,24 +336,33 @@ function TimGUI.OnCreateProjectClicked( event )
 	--
 	print( "-- Export "..template )
 	print( sc:Export() )
+	wx.wxSafeYield()	-- Updates the GUI log
 
 	print( "-- Make '"..path.."' a working copy" )
 	print( sc:MakeWorkingCopy() )
+	wx.wxSafeYield()	-- Updates the GUI log
 
 	print( "-- Fill in the template" )
 	TemplateReplace( { ProjectName = TimGUI.projectNameTextCtrl:GetValue() }, path .. "/" .. projName )
+	wx.wxSafeYield()	-- Updates the GUI log
 
 	print( "-- Add files" )
 	print( sc:AddFiles() )
+	wx.wxSafeYield()	-- Updates the GUI log
 
 	print( "-- Add the externals" )
 	print( sc:SetProperty( "svn:externals" ) )
+	wx.wxSafeYield()	-- Updates the GUI log
 
 	print( "-- Commit to "..scPath )
 	print( sc:Commit() )
+	wx.wxSafeYield()	-- Updates the GUI log
 
 	print( "-- Update "..path.." to complete and get the latest changes" )
 	print( sc:Update() )
+
+	wx.wxEndBusyCursor()
+	wx.wxLogStatus( TimGUI.frame, "Project creation complete...")
 end
 
 function TimGUI.OnSourceControlOpenClicked( event )
