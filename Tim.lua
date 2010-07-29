@@ -38,7 +38,7 @@ local preprocess = require( "luapp" ).preprocess
 -- CONSTANTS
 -- ----------------------------------------------------------------------------
 local APP_NAME			= "Tim the Project Enchanter"
-local APP_VERSION		= "1.01"
+local APP_VERSION		= "1.03"
 local ID_IDCOUNTER		= nil
 
 -- ----------------------------------------------------------------------------
