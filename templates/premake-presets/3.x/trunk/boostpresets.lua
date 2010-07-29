@@ -29,7 +29,7 @@
 -- ----------------------------------------------------------------------------
 
 -- Package options
-addoption( "boost-shared", "Link against Boost as a shared library" )
+addoption( "boost-shared", "Link against Boost as a shared library (including boost-utils)" )
 addoption( "boost-single-threaded", "Link against Boost using a single threaded runtime" )
 addoption( "boost-link-debug", "Link against the debug version in Debug configuration. Normally you link against the release version no matter the configuration." )
 addoption( "boost-force-compiler-version", "Force the compiler version to be included in the file name" )
@@ -164,6 +164,11 @@ function boost.Configure( pkg, libsToLink, gccVer )
 		table.insert( pkg.defines, { "WIN32_LEAN_AND_MEAN" } )
 	end
 
+	if options["boost-shared"] and string.find( target or "", "vs20" ) then
+		pkg.defines	= pkg.defines or {}
+		table.insert( pkg.defines, "BOOST_ALL_DYN_LINK"	)
+	end
+
 	if target == "gnu" or string.find( target or "", ".*-gcc" ) then
 		if not options["dynamic-runtime"] then
 			pkg.linkoptions			= pkg.linkoptions or {}
@@ -184,6 +189,27 @@ function boost.Configure( pkg, libsToLink, gccVer )
 		else
 			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, false, gccVer ) ) end
 			table.insert( pkg.links, libs )
+		end
+	end
+end
+
+function boost.CopyDynamicLibraries( libsToLink, destinationDirectory, gccVer, boostVer )
+	boostVer = boostVer or "1_40"
+
+	-- copy dlls to bin dir
+	if windows then
+		os.mkdir( destinationDirectory )
+		for _, v in ipairs( libsToLink ) do
+			local libname = boost.LibName( v, false, gccVer ) .. '-' .. boostVer .. '.dll'
+			local targetName = libname
+			if "bzip2" == v then
+				targetName = "libbz2.dll"
+			end
+			local sourcePath = '"%BOOST_ROOT%\\lib\\' .. libname .. '"'
+			local destPath = '"' .. destinationDirectory .. '\\' .. targetName .. '"'
+			local command = "copy " .. sourcePath .. ' ' .. destPath .. ' /B /V /Y'
+			print( command )
+			os.execute( command )
 		end
 	end
 end

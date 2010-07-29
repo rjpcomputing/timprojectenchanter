@@ -283,9 +283,9 @@ end
 ---	Looks if a single value is in a table.
 --	@param tbl Table to seach in.
 --	@param value String of the value to find in tbl.
-local function iContainsEntry( tbl, value )
+function iContainsEntry( tbl, value )
 	if type( tbl ) == "table" then
-		for _, val in pairs( tbl ) do			
+		for _, val in pairs( tbl ) do
 			if true == iContainsEntry( val, value ) then
 				return true
 			end
@@ -302,7 +302,7 @@ end
 ---	Removes a single value in a table.
 --	@param tbl Table to seach in.
 --	@param value String of the value to remove in tbl.
-local function iRemoveEntry( tbl, value )
+function iRemoveEntry( tbl, value )
 	for i, val in ipairs( tbl ) do
 		if type( val ) == "table" then
 			if true == iRemoveEntry( val, value ) then
@@ -360,5 +360,22 @@ function MakeVersion( pkg, nameOfFile, workingDirectory )
 	-- add template file to project so the template can be easily updated
 	if not iContainsEntry( pkg.files, nameOfTemplate ) then
 		table.insert( pkg.files, nameOfTemplate )
+	end
+end
+
+-- Copy the redist runtime dlls
+function CopyCRT( destinationDirectory )
+	if windows then
+		os.mkdir( destinationDirectory )
+		local vsdir = ""
+		if target == "vs2005" then
+			vsdir = "Microsoft Visual Studio 8"
+		elseif target == "vs2008" then
+			vsdir = "Microsoft Visual Studio 9.0"
+		end
+		local sourcePath = '"%PROGRAMFILES%\\' .. vsdir .. '\\VC\\redist\\x86\\Microsoft.VC90.CRT\\*"'
+		local command = 'copy ' .. sourcePath .. ' "' .. destinationDirectory .. '" /B /V /Y'
+		print( command )
+		os.execute( command )
 	end
 end

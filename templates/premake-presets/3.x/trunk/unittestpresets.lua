@@ -129,25 +129,26 @@ function unittest.Configure( pkg, files, excludes, mock )
 
 	local disableTest = "disable-" .. pkgName:lower().."-tests"
 	addoption( disableTest, "Disable " ..pkgName.. " tests to run." )
-	
+
 	local onlyTest = pkgName:lower().."-only-tests"
 	addoption( onlyTest, "Only create the test project for " ..pkgName )
 
 	-- Add the package to the project if being tested.
 	if ( not options[disableTest] ) and ( not options[disableAllTests] ) then
-	
+
 		local newPkg = deepcopy( pkg )		-- Make a deep copy of the package.
 		table.insert( _PACKAGES, newPkg )	-- Add it to the available _PACKAGES table.
-		
+
 		if ( options[onlyTest] ) then
 			-- remove original project
 			table.remove( _PACKAGES, #_PACKAGES - 1 )
 		end
-		
+
 		-- Set all the new package details.
 		newPkg.name = pkgName.."-tests"
 		newPkg.target = pkg.target.."-tests"
 		newPkg.config["Debug"].target = pkg.config["Debug"].target.."-tests"
+		newPkg.config["Release"].target = pkg.config["Release"].target or pkg.target.."-tests"
 		newPkg.kind = "exe"
 		newPkg.buildflags["no-main"] = nil
 		newPkg.bindir = pkg.bindir or project.bindir
@@ -163,8 +164,13 @@ function unittest.Configure( pkg, files, excludes, mock )
 			--table.insert( newPkg.links, { pkg.name } )
 		end
 
-		table.insert( newPkg.config["Debug"].postbuildcommands, { newPkg.bindir .. pathSeparator .. newPkg.config["Debug"].target } )
-		table.insert( newPkg.config["Release"].postbuildcommands, { newPkg.bindir .. pathSeparator .. newPkg.target } )
+		local teamCitySuffix = ""
+		if options["teamcity"] then
+			teamCitySuffix = " --teamCityOutput"
+		end
+
+		table.insert( newPkg.config["Debug"].postbuildcommands, { newPkg.bindir .. pathSeparator .. newPkg.config["Debug"].target .. teamCitySuffix } )
+		table.insert( newPkg.config["Release"].postbuildcommands, { newPkg.bindir .. pathSeparator .. newPkg.config["Release"].target .. teamCitySuffix } )
 
 		-- Do unit test packages so it does not have to be called elsewhere
 		DoUnitTestSetup( newPkg, files, excludes )

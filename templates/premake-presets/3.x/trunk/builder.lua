@@ -192,15 +192,15 @@ local function ExecuteGnuBuilder( cfg, shouldClean )
 		error( "bad argument #1 to ExecuteGnuBuilder. (Expected string but recieved "..type( cfg )..")" )
 	end
 	shouldClean = shouldClean or false
-	
+
 	print( "Make Builder invoked." ); io.stdout:flush()
-	
+
 	-- Launch make to build
 	local make = "make"
 	if IsWindows() then
 		make = "mingw32-make"
 	end
-	
+
 	-- Launch make to clean
 	if shouldClean then
 		local cleanCmd = string.format( "%s CONFIG=%s clean", make, cfg )
@@ -212,7 +212,7 @@ local function ExecuteGnuBuilder( cfg, shouldClean )
 			os.exit( 1 )
 		end
 	end
-	
+
 	-- Luanch make to build
 	local makeCmd = string.format( "%s -j %s CONFIG=%s", make, GetNumberOfProcessors(), cfg )
 	print( makeCmd ); io.stdout:flush()
@@ -251,7 +251,7 @@ local function ExecuteVs2005Builder( cfg, shouldClean )
 		error( "No VS2005 solution file found. Make sure the project files are generated." )
 	end
 	print( "Using solution "..solutionFile ); io.stdout:flush()
-	
+
 	-- Launch vc to clean
 	if shouldClean then
 		print( "Cleaning solution..." ); io.stdout:flush()
@@ -281,7 +281,7 @@ local function ExecuteVs2008Builder( cfg, shouldClean )
 		error( "bad argument #1 to ExecuteVs2008Builder. (Expected string but recieved "..type( cfg )..")" )
 	end
 	shouldClean = shouldClean or false
-	
+
 	print( "VS2008 Builder invoked." ); io.stdout:flush()
 
 	-- Determine Visual Studio path
@@ -301,7 +301,7 @@ local function ExecuteVs2008Builder( cfg, shouldClean )
 		error( "No VS2008 solution file found. Make sure the project files are generated." )
 	end
 	print( "Using solution "..solutionFile ); io.stdout:flush()
-	
+
 	-- Launch vc to clean
 	if shouldClean then
 		print( "Cleaning solution..." ); io.stdout:flush()
@@ -313,7 +313,7 @@ local function ExecuteVs2008Builder( cfg, shouldClean )
 			os.exit( 1 )
 		end
 	end
-	
+
 	-- Launch vc to build
 	print( "Building solution..." ); io.stdout:flush()
 	local buildString = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
@@ -343,8 +343,8 @@ local function ExecuteINNOBuilder( file )
 	if IsWindows() then
 		-- Clean all old installer files.
 		RemoveAll( "*.exe" )
-
-		installerCmd = string.format( [[""C:\Program Files\Inno Setup 5\ISCC.exe" %q"]], pl.path.basename( file ) )
+		local innoPath = os.getenv( "PROGRAMFILES" ) .. [[\Inno Setup 5\ISCC.exe]]
+		installerCmd = string.format( [[""%s" %q"]], innoPath, pl.path.basename( file ) )
 		print( installerCmd ); io.stdout:flush()
 
 		local installerRet = os.execute( installerCmd )
@@ -422,6 +422,7 @@ function main()
 	-i,--installer      (default none)      One of the following: inno or nsis.
 	-f,--installerfile  (default none)      The installer source file to pass to the installer, if needed.
 	-p,--premake        (default none)      Extra arguments passed on to premake.
+	-m,--teamcity       (default true)      Enable teamcity output.
 	-c,--clean                              Clean project sources before building.
 	]]
 
@@ -433,7 +434,7 @@ function main()
 
 	-- Setup the build configuration
 	local build = args.build or ""
-	
+
 	-- Setup if the build should clean first
 	local shouldClean = args.clean
 
@@ -453,7 +454,11 @@ function main()
 	-- Setup the Premake extra arguments
 	local premakeArgs = ""
 	if args.premake and args.premake ~= "none" then
-	premakeArgs = args.premake
+		premakeArgs = args.premake
+	end
+
+	if args.teamcity and args.teamcity ~= "false" then
+		premakeArgs = premakeArgs .. " --teamcity"
 	end
 
 	-- Generate the project files
