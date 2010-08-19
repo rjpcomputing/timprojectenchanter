@@ -319,6 +319,55 @@ function iRemoveEntry( tbl, value )
 	return false
 end
 
+function TableWrite( tbl, indent )
+	indent = indent or "\t"
+	local function FormatKey( k )
+		if type( k ) == "string" then
+			return k --'"' .. k .. '"]'
+		elseif type( k ) == "number" then
+			return "[" .. k .. "]"
+		else
+			return tostring( k )
+		end
+	end
+	
+	local function FormatValue( v )
+		if type( v ) == "string" then
+			return '"' .. v .. '"'
+		else
+			return tostring( v )
+		end
+	end
+	
+	local retVal = ""
+	local indentCount = 0
+	local function Stringify( tbl, indent )
+		-- Start the table brace
+		retVal = retVal .. indent:rep( indentCount ) .. "{\n"
+		-- Indent the contents
+		indentCount = indentCount + 1
+		for key, value in pairs( tbl ) do
+			if type( value ) == "table" then
+				Stringify( value, indent )
+			else
+				retVal = retVal .. string.format( "%s%s = %s,\n", indent:rep( indentCount ), FormatKey( key ), FormatValue( value ) )
+			end
+		end
+		-- Unindent to add the closing table brace
+		indentCount = indentCount - 1
+		-- End the table brace
+		retVal = retVal .. indent:rep( indentCount ) .. "}\n"
+		
+		return retVal
+	end
+	
+	return Stringify( tbl, indent )
+end
+
+function pprint( tbl, indent )
+	print( TableWrite( tbl, indent ) )
+end
+
 ---	Assumptions: Tool SubWCRev is installed
 --	Make a version to be maintained by subversion
 --	@param name of the file to be created for versioning ( nameOfFile.template must exist as the template for created file )
@@ -363,17 +412,34 @@ function MakeVersion( pkg, nameOfFile, workingDirectory )
 	end
 end
 
+function CopyDebugCRT( destinationDirectory )
+	CopyCRT( destinationDirectory, true )
+end
+
 -- Copy the redist runtime dlls
-function CopyCRT( destinationDirectory )
+function CopyCRT( destinationDirectory, copyDebugCRT )
+
+	local copyDebugCRT = copyDebugCRT or false
+
 	if windows then
+		local sourcePath = ""
 		os.mkdir( destinationDirectory )
-		local vsdir = ""
-		if target == "vs2005" then
-			vsdir = "Microsoft Visual Studio 8"
-		elseif target == "vs2008" then
-			vsdir = "Microsoft Visual Studio 9.0"
+		if ( target:find( "vs20" ) ) then
+			local vsdir = ""
+			if target == "vs2005" then
+				vsdir = "Microsoft Visual Studio 8"
+			elseif target == "vs2008" then
+				vsdir = "Microsoft Visual Studio 9.0"
+			end
+
+			if copyDebugCRT then
+				sourcePath = '"%PROGRAMFILES%\\' .. vsdir .. '\\VC\\redist\\Debug_NonRedist\\x86\\Microsoft.VC90.DebugCRT\\*"'
+			else
+				sourcePath = '"%PROGRAMFILES%\\' .. vsdir .. '\\VC\\redist\\x86\\Microsoft.VC90.CRT\\*"'
+			end
+		else
+			sourcePath = "C:\\MinGW4\\bin\\mingwm10.dll"
 		end
-		local sourcePath = '"%PROGRAMFILES%\\' .. vsdir .. '\\VC\\redist\\x86\\Microsoft.VC90.CRT\\*"'
 		local command = 'copy ' .. sourcePath .. ' "' .. destinationDirectory .. '" /B /V /Y'
 		print( command )
 		os.execute( command )

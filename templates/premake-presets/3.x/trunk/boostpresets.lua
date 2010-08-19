@@ -36,6 +36,7 @@ addoption( "boost-force-compiler-version", "Force the compiler version to be inc
 
 -- Namespace
 boost = {}
+boost.version = "1_40" -- default boost version
 
 ---	Gets the Boost specific Toolset name. This only supports Visual C++ and
 --	GCC.
@@ -81,7 +82,7 @@ end
 --		                   the default one supplied with your compiler"
 --	Comprimises:
 --		- Only supports VC and GCC
-function boost.LibName( libraryName, isDebug, gccVer )
+function boost.LibName( libraryName, isDebug, gccVer, boostVer )
 	local name = ""
 
 	-- Toolset - target/compiler.
@@ -107,7 +108,15 @@ function boost.LibName( libraryName, isDebug, gccVer )
 	if abi:len() > 0 then abi = "-"..abi end
 	--print( "ABI:", abi )
 
-	name = "boost_"..libraryName..toolset..threading..abi
+	-- Boost version
+	local boostVerSuffix = ""
+	if options["boost-shared"] then
+		if boostVer ~= "" then
+			boostVerSuffix = "-" .. boostVer
+		end
+	end
+
+	name = "boost_"..libraryName..toolset..threading..abi..boostVerSuffix
 	--print( name )
 
 	return name
@@ -138,7 +147,9 @@ end
 --
 --	Example:
 --		boost.Configure( package, { "libsToLink" }, "44" )
-function boost.Configure( pkg, libsToLink, gccVer )
+function boost.Configure( pkg, libsToLink, gccVer, boostVer )
+	boostVer = boostVer or boost.version
+
 	libsToLink = libsToLink or {}
 	-- Check to make sure that the pkg is valid.
 	assert( type( pkg ) == "table", "Param1:pkg type missmatch, should be a table." )
@@ -164,7 +175,7 @@ function boost.Configure( pkg, libsToLink, gccVer )
 		table.insert( pkg.defines, { "WIN32_LEAN_AND_MEAN" } )
 	end
 
-	if options["boost-shared"] and string.find( target or "", "vs20" ) then
+	if options["boost-shared"] then
 		pkg.defines	= pkg.defines or {}
 		table.insert( pkg.defines, "BOOST_ALL_DYN_LINK"	)
 	end
@@ -181,28 +192,28 @@ function boost.Configure( pkg, libsToLink, gccVer )
 		-- Set Boost libraries to link.
 		local libs = {}
 		if options["boost-link-debug"] then
-			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, true, gccVer ) ) end
+			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, true, gccVer, boostVer ) ) end
 			table.insert( pkg.config["Debug"].links, libs )
 			libs = {}
-			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, false, gccVer ) ) end
+			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, false, gccVer, boostVer ) ) end
 			table.insert( pkg.config["Release"].links, libs )
 		else
-			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, false, gccVer ) ) end
+			for _, v in ipairs( libsToLink ) do table.insert( libs, boost.LibName( v, false, gccVer, boostVer ) ) end
 			table.insert( pkg.links, libs )
 		end
 	end
 end
 
 function boost.CopyDynamicLibraries( libsToLink, destinationDirectory, gccVer, boostVer )
-	boostVer = boostVer or "1_40"
+	boostVer = boostVer or boost.version
 
 	-- copy dlls to bin dir
 	if windows then
 		os.mkdir( destinationDirectory )
 		for _, v in ipairs( libsToLink ) do
-			local libname = boost.LibName( v, false, gccVer ) .. '-' .. boostVer .. '.dll'
+			local libname = boost.LibName( v, false, gccVer, boostVer ) .. '.dll'
 			local targetName = libname
-			if "bzip2" == v then
+			if "bzip2" == v and target:find("vs20") then
 				targetName = "libbz2.dll"
 			end
 			local sourcePath = '"%BOOST_ROOT%\\lib\\' .. libname .. '"'
