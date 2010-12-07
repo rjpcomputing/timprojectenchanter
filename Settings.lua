@@ -8,7 +8,8 @@ Settings =
 	Templates =
 	{
 		Console			= "http://timprojectenchanter.googlecode.com/svn/templates/console/trunk/",
-		wxGUI			= "http://timprojectenchanter.googlecode.com/svn/templates/wxGUI/trunk/"
+		wxGUI			= "http://timprojectenchanter.googlecode.com/svn/templates/wxGUI/trunk/",
+		qtGUI			= "http://timprojectenchanter.googlecode.com/svn/templates/qtGUI/trunk/"
 	},
 	-- Source Control Settings
 	--

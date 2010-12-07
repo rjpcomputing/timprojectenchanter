@@ -38,7 +38,7 @@ local preprocess = require( "luapp" ).preprocess
 -- CONSTANTS
 -- ----------------------------------------------------------------------------
 local APP_NAME			= "Tim the Project Enchanter"
-local APP_VERSION		= "1.03"
+local APP_VERSION		= "1.05"
 local ID_IDCOUNTER		= nil
 
 -- ----------------------------------------------------------------------------
@@ -84,7 +84,7 @@ local function TemplateReplace( keywords, path )
 	for file in lfs.dir( path ) do
 		if file ~= "." and file ~= ".." and file ~= ".svn" and file ~= "svn-props.tmp" then
 			local f = path..'/'..file
-			print( "\t "..f )
+            --print( string.format( "\t Found %q", f ) )
 			local attr = lfs.attributes( f )
 			assert( type( attr ) == "table" )
 			if attr.mode == "directory" then
@@ -106,8 +106,11 @@ local function TemplateReplace( keywords, path )
 
 				local ret, message = preprocess( params )
 				if not ret then
+                    print( message )
 					error( message )
+                    return
 				end
+                print( string.format( "\tProcessed and renamed %q to %q", f, newName ) )
 
 				if numReplaced > 0 then
 					params.output:close()
@@ -337,32 +340,44 @@ function TimGUI.OnCreateProjectClicked( event )
 	print( "-- Export "..template )
 	print( sc:Export() )
 	wx.wxSafeYield()	-- Updates the GUI log
-
-	print( "-- Make '"..path.."' a working copy" )
-	print( sc:MakeWorkingCopy() )
-	wx.wxSafeYield()	-- Updates the GUI log
-
+	
+	if arg[1] ~= "--no-version-control" then
+		print( "-- Make '"..path.."' a working copy" )
+		print( sc:MakeWorkingCopy() )
+		wx.wxSafeYield()	-- Updates the GUI log
+	end
+	
 	print( "-- Fill in the template" )
-	TemplateReplace( { ProjectName = TimGUI.projectNameTextCtrl:GetValue() }, path .. "/" .. projName )
+	local err, message = pcall( TemplateReplace, { ProjectName = TimGUI.projectNameTextCtrl:GetValue() }, path .. "/" .. projName )
 	wx.wxSafeYield()	-- Updates the GUI log
+    if not err then
+        wx.wxEndBusyCursor()
+        wx.wxLogStatus( TimGUI.frame, "Project failed to complete...")
+        local errMsg = "Error during preprocess phase. More info: " .. message
+        print( errMsg )
+        return
+    end
+	
+	if arg[1] ~= "--no-version-control" then
+		print( "-- Add files" )
+		print( sc:AddFiles() )
+		wx.wxSafeYield()	-- Updates the GUI log
 
-	print( "-- Add files" )
-	print( sc:AddFiles() )
-	wx.wxSafeYield()	-- Updates the GUI log
+		print( "-- Add the externals" )
+		print( sc:SetProperty( "svn:externals" ) )
+		wx.wxSafeYield()	-- Updates the GUI log
 
-	print( "-- Add the externals" )
-	print( sc:SetProperty( "svn:externals" ) )
-	wx.wxSafeYield()	-- Updates the GUI log
+		print( "-- Commit to "..scPath )
+		print( sc:Commit() )
+		wx.wxSafeYield()	-- Updates the GUI log
 
-	print( "-- Commit to "..scPath )
-	print( sc:Commit() )
-	wx.wxSafeYield()	-- Updates the GUI log
-
-	print( "-- Update "..path.." to complete and get the latest changes" )
-	print( sc:Update() )
-
+		print( "-- Update "..path.." to complete and get the latest changes" )
+		print( sc:Update() )
+	end
+	
 	wx.wxEndBusyCursor()
-	wx.wxLogStatus( TimGUI.frame, "Project creation complete...")
+    wx.wxMessageBox( "Project creation completed successfully...")
+	wx.wxLogStatus( TimGUI.frame, "Project creation complete..." )
 end
 
 function TimGUI.OnSourceControlOpenClicked( event )
