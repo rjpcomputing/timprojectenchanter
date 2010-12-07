@@ -15,13 +15,11 @@ $("#")define __$(ProjectName:upper())FRAME__
 $("#")include <QMainWindow>
 $("#")include <QLabel>
 
-namespace Ui
-{
-    class $(ProjectName)FrameBase;
-}
+// UI
+$("#")include <ui_$(ProjectName)Frame.h>
 
 /** Implementing $(ProjectName)FrameBase */
-class $(ProjectName)Frame : public $(ProjectName)FrameBase
+class $(ProjectName)Frame : public QMainWindow, private Ui::$(ProjectName)FrameBase
 {
 	Q_OBJECT
 	

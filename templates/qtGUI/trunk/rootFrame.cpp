@@ -2,13 +2,11 @@
 $("#")include <QApplication>
 $("#")include <QMessageBox>
 
-// UI
-$("#")include "ui_$(ProjectName).h"
-
 $("#")include "$(ProjectName)Frame.h"
 $("#")include "$(ProjectName)Version.h"
 
 $(ProjectName)Frame::$(ProjectName)Frame( QWidget* parent ) :
+	QMainWindow( parent ),
 	$(ProjectName)FrameBase( parent )
 {
 	setupUi( this );

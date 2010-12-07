@@ -14,5 +14,5 @@ int main( int argc, char* argv[] )
 	
     int retVal = app.exec();
     
-	return retval;
+	return retVal;
 }
