@@ -16,7 +16,7 @@ package.name								= project.name
 package.kind								= "winexe"
 
 package.files								= {
-												matchfiles( "*.cpp", "*.h", "*.lua", "*.ui" )
+												matchfiles( "*.cpp", "*.h", "*.lua" )
 											  }
 
 package.includepaths						= {
