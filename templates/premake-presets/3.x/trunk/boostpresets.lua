@@ -33,10 +33,34 @@ addoption( "boost-shared", "Link against Boost as a shared library (including bo
 addoption( "boost-single-threaded", "Link against Boost using a single threaded runtime" )
 addoption( "boost-link-debug", "Link against the debug version in Debug configuration. Normally you link against the release version no matter the configuration." )
 addoption( "boost-force-compiler-version", "Force the compiler version to be included in the file name" )
+addoption( "boost-nocopy-debug", "Override copying the debug libraries in the CopyDynamicLibraries method" )
 
 -- Namespace
 boost = {}
 boost.version = "1_40" -- default boost version
+
+if windows then
+	boost.root = os.getenv( "BOOST_ROOT" )
+	if not boost.root then
+		error( "missing the BOOST_ROOT environment variable" )
+	end
+
+	-- determine version from BOOST_ROOT environment variable
+	local slashIndex = 1;
+	while true do
+		local nextIndex = boost.root:find( "\\", slashIndex + 1, true )
+		if nextIndex ~= nil then
+			slashIndex = nextIndex
+		else
+			break
+		end
+	end
+
+	local versionDir = boost.root:sub( slashIndex + 1 )
+	local versionString = versionDir:gsub( "%.", "_" )
+	local shortVersionString = versionString:gsub( "_0", "" )
+	boost.version = shortVersionString
+end
 
 ---	Gets the Boost specific Toolset name. This only supports Visual C++ and
 --	GCC.
@@ -102,6 +126,14 @@ function boost.LibName( libraryName, isDebug, gccVer, boostVer )
 	-- ABI
 	local abi = ""
 	if not options["dynamic-runtime"] then abi = abi.."s" end
+	if isDebug and windows then
+		if target == "gnu" or string.find( target or "", ".*-gcc" ) then
+
+		else
+			abi = abi.."g"
+		end
+	end
+
 	if isDebug then abi = abi.."d" end
 	if options["using-stlport"] then abi = abi.."p" end
 	-- Now add the '-' to finish the tag.
@@ -110,7 +142,7 @@ function boost.LibName( libraryName, isDebug, gccVer, boostVer )
 
 	-- Boost version
 	local boostVerSuffix = ""
-	if options["boost-shared"] then
+	if not linux and options["boost-shared"] then
 		if boostVer ~= "" then
 			boostVerSuffix = "-" .. boostVer
 		end
@@ -167,9 +199,9 @@ function boost.Configure( pkg, libsToLink, gccVer, boostVer )
 		pkg.defines					= pkg.defines or {}
 		pkg.buildoptions			= pkg.buildoptions or {}
 
-		AddSystemPath( pkg, "$(BOOST_ROOT)" )
+		AddSystemPath( pkg, boost.root )
 
-		table.insert( pkg.libpaths, { "$(BOOST_ROOT)/lib" } )
+		table.insert( pkg.libpaths, { boost.root .. "/lib" } )
 		table.insert( pkg.defines, { "_WIN32_WINNT=0x0500" } )	--(i.e. Windows 2000 target)
 		--(the following line prevents in boost: socket_types.hpp(27) : fatal error C1189: #error :  WinSock.h has already been included)
 		table.insert( pkg.defines, { "WIN32_LEAN_AND_MEAN" } )
@@ -204,23 +236,37 @@ function boost.Configure( pkg, libsToLink, gccVer, boostVer )
 	end
 end
 
-function boost.CopyDynamicLibraries( libsToLink, destinationDirectory, gccVer, boostVer )
-	boostVer = boostVer or boost.version
+function boost.CopyDynamicLibraries( libsToLink, destinationDirectory, gccVer, boostVer, copyDebug )
+	if target then
+		boostVer = boostVer or boost.version
+		local shouldCopyDebugLibs = copyDebug
+		if copyDebug == nil then
+			shouldCopyDebugLibs = true
+		end
 
-	-- copy dlls to bin dir
-	if windows then
-		os.mkdir( destinationDirectory )
-		for _, v in ipairs( libsToLink ) do
-			local libname = boost.LibName( v, false, gccVer, boostVer ) .. '.dll'
-			local targetName = libname
-			if "bzip2" == v and target:find("vs20") then
-				targetName = "libbz2.dll"
+		if options["boost-nocopy-debug"] then
+			shouldCopyDebugLibs = false
+		end
+
+		-- copy dlls to bin dir
+		if windows then
+			os.mkdir( destinationDirectory )
+			function copyLibs( debugCopy )
+				for _, v in ipairs( libsToLink ) do
+					local libname = boost.LibName( v, debugCopy, gccVer, boostVer ) .. '.dll'
+					local targetName = libname
+					if "bzip2" == v and string.find( target or "", "vs20" ) then
+						targetName = "libbz2.dll"
+					end
+					local sourcePath = '"' .. boost.root .. '\\lib\\' .. libname .. '"'
+					local destPath = '"' .. destinationDirectory .. '\\' .. targetName .. '"'
+					WindowsCopy( sourcePath, destPath )
+				end
 			end
-			local sourcePath = '"%BOOST_ROOT%\\lib\\' .. libname .. '"'
-			local destPath = '"' .. destinationDirectory .. '\\' .. targetName .. '"'
-			local command = "copy " .. sourcePath .. ' ' .. destPath .. ' /B /V /Y'
-			print( command )
-			os.execute( command )
+			if shouldCopyDebugLibs then
+				copyLibs( true )
+			end
+			copyLibs( false )
 		end
 	end
 end

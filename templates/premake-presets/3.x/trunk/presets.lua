@@ -34,8 +34,11 @@ addoption( "dynamic-runtime", "Use the dynamically loadable version of the runti
 addoption( "unicode", "Use the Unicode character set." )
 addoption( "force-32bit", "Forces GCC to build as a 32bit only" )
 addoption( "release-with-debug-symbols", "Adds Debug symbols to the release build." )
+
 if windows then
 	addoption( "disable-mingw-mthreads", "Disables the MinGW specific -mthreads compile option." )
+else
+	addoption( "rpath", "Linux only, set rpath on the linker line to find shared libraries next to executable")
 end
 
 ---	Configures a target with  a set of this pre-configuration.
@@ -60,6 +63,7 @@ end
 --	Appended to package setup:
 --		package.buildflags (where appropriate)	= { "extra-warnings", "static-runtime", "no-symbols", "optimize", "no-main", "unicode" }
 --											  (VC) { "seh-exceptions", "no-64bit-checks" }
+--											  (GCC) { "no-import-lib" }
 --		package.buildoptions				= (GCC) { "-W", "-Wno-unknown-pragmas", "-Wno-deprecated", "-fno-strict-aliasing"[, "-mthreads"] }
 --		package.linkoptions					= (GCC/Windows) { ["-mthreads"] }
 --											  (Linux) { ["-fPIC"] }
@@ -130,7 +134,9 @@ function Configure( pkg )
 	pkg.buildflags								= pkg.buildflags or {}
 	pkg.config["Debug"].buildflags				= pkg.config["Debug"].buildflags or {}
 	pkg.config["Release"].buildflags			= pkg.config["Release"].buildflags or {}
-	table.insert( pkg.buildflags, { "extra-warnings" } )
+	if not options["no-extra-warnings"] then
+		table.insert( pkg.buildflags, { "extra-warnings" } )
+	end
 	if pkg.kind == "winexe" then
 		table.insert( pkg.buildflags, { "no-main" } )
 	end
@@ -174,6 +180,8 @@ function Configure( pkg )
 	pkg.linkoptions								= pkg.linkoptions or {}
 	if target == "gnu" or string.find( target or "", ".*-gcc" ) then
 		table.insert( pkg.buildoptions, { "-W", "-Wno-unknown-pragmas", "-Wno-deprecated", "-fno-strict-aliasing" } )
+		table.insert( pkg.linkoptions, { "-Wl,-E" } )
+		table.insert( pkg.buildflags, { "no-import-lib" } )
 		if windows then
 			if not options["disable-mingw-mthreads"] then
 				table.insert( pkg.buildoptions, { "-mthreads" } )
@@ -193,10 +201,40 @@ function Configure( pkg )
 		end
 	end
 
+	if linux then
+		local useRpath = true
+		local rpath="$$``ORIGIN"
+
+		local rpathOption = options["rpath"]
+
+		if rpathOption then
+			if "no" == rpathOption or "" == rpathOption then
+				useRpath = false
+			else
+				rpath = rpathOption
+			end
+		end
+
+		if useRpath then
+			table.insert( package.linkoptions, "-Wl,-rpath," .. rpath )
+		end
+	end
+
 	if target == "vs2005" or target == "vs2008" then
 		-- Visual C++ 2005/2008
 		table.insert( pkg.buildflags, { "seh-exceptions", "no-64bit-checks" } )
-		table.insert( pkg.defines, { "_CRT_SECURE_NO_DEPRECATE", "_SCL_SECURE_NO_WARNINGS" } )
+		table.insert( pkg.defines, { "_CRT_SECURE_NO_DEPRECATE", "_SCL_SECURE_NO_WARNINGS", "_CRT_NONSTDC_NO_DEPRECATE" } )
+
+		--[[
+		supress warning C4503: decorated name length exceeded, name was truncated
+		From MSDN:
+		It is possible to ship an application that generates C4503, but if you get link time errors on a truncated symbol,
+		it will be more difficult to determine the type of the symbol in the error. Debugging will also be more difficult;
+		the debugger will also have difficultly mapping symbol name to type name.
+		The correctness of the program, however, is unaffected by the truncated name.
+		]]
+		table.insert( pkg.buildoptions, "/wd4503" )
+
 
 		-- Set object output directory.
 		if options["unicode"] then
@@ -330,7 +368,7 @@ function TableWrite( tbl, indent )
 			return tostring( k )
 		end
 	end
-	
+
 	local function FormatValue( v )
 		if type( v ) == "string" then
 			return '"' .. v .. '"'
@@ -338,7 +376,7 @@ function TableWrite( tbl, indent )
 			return tostring( v )
 		end
 	end
-	
+
 	local retVal = ""
 	local indentCount = 0
 	local function Stringify( tbl, indent )
@@ -357,15 +395,15 @@ function TableWrite( tbl, indent )
 		indentCount = indentCount - 1
 		-- End the table brace
 		retVal = retVal .. indent:rep( indentCount ) .. "}\n"
-		
+
 		return retVal
 	end
-	
+
 	return Stringify( tbl, indent )
 end
 
 function pprint( tbl, indent )
-	print( TableWrite( tbl, indent ) )
+	print( TableWrite( tbl, indent ) ); io.stdout:flush()
 end
 
 ---	Assumptions: Tool SubWCRev is installed
@@ -412,36 +450,50 @@ function MakeVersion( pkg, nameOfFile, workingDirectory )
 	end
 end
 
+function WindowsCopy( sourcePath, destinationDirectory )
+	if windows then
+		local command = 'copy ' .. sourcePath .. ' "' .. destinationDirectory .. '" /B /V /Y'
+		print( command ); io.stdout:flush()
+		os.execute( command )
+	end
+end
+
 function CopyDebugCRT( destinationDirectory )
 	CopyCRT( destinationDirectory, true )
 end
 
 -- Copy the redist runtime dlls
 function CopyCRT( destinationDirectory, copyDebugCRT )
+	if target then
+		local copyDebugCRT = copyDebugCRT or false
 
-	local copyDebugCRT = copyDebugCRT or false
+		if windows then
+			local sourcePath = ""
+			os.mkdir( destinationDirectory )
+			if string.find( target or "", "vs20" ) then
+				local vsdir = ""
+				local vsver = ""
+				if target == "vs2005" then
+					vsdir = "Microsoft Visual Studio 8"
+					vsver = "VC80"
+				elseif target == "vs2008" then
+					vsdir = "Microsoft Visual Studio 9.0"
+					vsver = "VC90"
+				end
 
-	if windows then
-		local sourcePath = ""
-		os.mkdir( destinationDirectory )
-		if ( target:find( "vs20" ) ) then
-			local vsdir = ""
-			if target == "vs2005" then
-				vsdir = "Microsoft Visual Studio 8"
-			elseif target == "vs2008" then
-				vsdir = "Microsoft Visual Studio 9.0"
-			end
-
-			if copyDebugCRT then
-				sourcePath = '"%PROGRAMFILES%\\' .. vsdir .. '\\VC\\redist\\Debug_NonRedist\\x86\\Microsoft.VC90.DebugCRT\\*"'
+				if copyDebugCRT then
+					sourcePath = '"%PROGRAMFILES%\\' .. vsdir .. '\\VC\\redist\\Debug_NonRedist\\x86\\Microsoft.' .. vsver .. '.DebugCRT\\*"'
+				else
+					sourcePath = '"%PROGRAMFILES%\\' .. vsdir .. '\\VC\\redist\\x86\\Microsoft.' .. vsver .. '.CRT\\*"'
+				end
+				WindowsCopy( sourcePath, destinationDirectory )
 			else
-				sourcePath = '"%PROGRAMFILES%\\' .. vsdir .. '\\VC\\redist\\x86\\Microsoft.VC90.CRT\\*"'
+				sourcePath = "C:\\MinGW4\\bin\\mingwm10.dll"
+				WindowsCopy( sourcePath, destinationDirectory )
+
+				sourcePath = "C:\\MinGW4\\bin\\libgcc_s_dw2-1.dll"
+				WindowsCopy( sourcePath, destinationDirectory )
 			end
-		else
-			sourcePath = "C:\\MinGW4\\bin\\mingwm10.dll"
 		end
-		local command = 'copy ' .. sourcePath .. ' "' .. destinationDirectory .. '" /B /V /Y'
-		print( command )
-		os.execute( command )
 	end
 end

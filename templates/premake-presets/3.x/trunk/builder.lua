@@ -169,15 +169,28 @@ end
 -- BUILDER FUNCTIONS ----------------------------------------------------------
 --
 ---	Launch Premake to generate the project files.
-local function GenerateProjectFiles( tget, args )
+local function GenerateProjectFiles( tget, options, args, shouldUsePremake4 )
 	if type( tget ) ~= "string" then
 		error( "bad argument #1 to GenerateProjectFiles. (Expected string but recieved "..type( tget )..")" )
 	end
-  if type( args ) ~= "string" then
+	if type( args ) ~= "string" then
 		error( "bad argument #2 to GenerateProjectFiles. (Expected string but recieved "..type( args )..")" )
 	end
 
-	local premakeRet = os.execute( "premake --target " .. tget .. " " .. args )
+	local premakeRet = -1
+	local suffix = ""
+	if IsWindows() then
+		suffix = ".exe"
+	end
+	if shouldUsePremake4 then
+		local premakeCmd = "premake4" .. suffix .. " " .. options .. " " .. tget .. " " .. args
+		print( premakeCmd ); io.stdout:flush()
+		premakeRet = os.execute( premakeCmd )
+	else
+		local premakeCmd = "premake" .. suffix .. " --target " .. tget .. " " .. options .. " " .. args
+		print( premakeCmd ); io.stdout:flush()
+		premakeRet = os.execute( premakeCmd )
+	end
 
 	if premakeRet ~= 0 then
 		print( string.format( "Premake error (%i) occured.", premakeRet ) )
@@ -186,7 +199,7 @@ local function GenerateProjectFiles( tget, args )
 	print( "" )
 end
 
-local function ExecuteGnuBuilder( cfg, shouldClean )
+local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles )
 	-- Check parameters
 	if type( cfg ) ~= "string" then
 		error( "bad argument #1 to ExecuteGnuBuilder. (Expected string but recieved "..type( cfg )..")" )
@@ -201,27 +214,40 @@ local function ExecuteGnuBuilder( cfg, shouldClean )
 		make = "mingw32-make"
 	end
 
+	local configLabel = "CONFIG"
+	if premake4makefiles then
+		configLabel = "config"
+		cfg = string.lower( cfg )
+	end
+
 	-- Launch make to clean
 	if shouldClean then
-		local cleanCmd = string.format( "%s CONFIG=%s clean", make, cfg )
+		local cleanCmd = string.format( "%s %s=%s clean", make, configLabel, cfg )
 		print( cleanCmd ); io.stdout:flush()
 		local makeRet = os.execute( cleanCmd )
-		--print( "VS2005 clean process exited with code "..( vsRet or "<nil>" ) )
 		if makeRet ~= 0 then
 			print( string.format( "Make clean error (%i) occured. Converted exit code to 1", makeRet ) )
 			os.exit( 1 )
 		end
 	end
 
-	-- Luanch make to build
-	local makeCmd = string.format( "%s -j %s CONFIG=%s", make, GetNumberOfProcessors(), cfg )
+	-- Launch make to build
+	local makeCmd = ""
+	if IsWindows() then
+		makeCmd = string.format( "%s -j %s %s=%s", make, GetNumberOfProcessors(), configLabel, cfg )
+	else
+		makeCmd = string.format( "%s %s=%s", make, configLabel, cfg )
+	end
 	print( makeCmd ); io.stdout:flush()
 	local makeRet = os.execute( makeCmd )
-	--print( "Make process exited with code "..( makeRet or "<nil>" ) )
 	if makeRet ~= 0 then
 		print( string.format( "Make error (%i) occured. Converted exit code to 1", makeRet ) )
 		os.exit( 1 )
 	end
+end
+
+local function ExecuteGmakeBuilder( cfg, shouldClean )
+	ExecuteGnuBuilder( cfg, shouldClean, true )
 end
 
 local function ExecuteVs2005Builder( cfg, shouldClean )
@@ -343,6 +369,7 @@ local function ExecuteINNOBuilder( file )
 	if IsWindows() then
 		-- Clean all old installer files.
 		RemoveAll( "*.exe" )
+		RemoveAll( "output/*.exe" )
 		local innoPath = os.getenv( "PROGRAMFILES" ) .. [[\Inno Setup 5\ISCC.exe]]
 		installerCmd = string.format( [[""%s" %q"]], innoPath, pl.path.basename( file ) )
 		print( installerCmd ); io.stdout:flush()
@@ -404,7 +431,8 @@ Targets =
 {
   gnu = ExecuteGnuBuilder,
   vs2005 = ExecuteVs2005Builder,
-  vs2008 = ExecuteVs2008Builder
+  vs2008 = ExecuteVs2008Builder,
+  gmake = ExecuteGmakeBuilder
 }
 
 Installers =
@@ -421,16 +449,11 @@ function main()
 	-b,--build          (default Release)   Project-specific build configuration, usually Debug or Release.
 	-i,--installer      (default none)      One of the following: inno or nsis.
 	-f,--installerfile  (default none)      The installer source file to pass to the installer, if needed.
-	-p,--premake        (default none)      Extra arguments passed on to premake.
+	-p,--premake        (default none)      Extra options passed on to premake.
 	-m,--teamcity       (default true)      Enable teamcity output.
 	-c,--clean                              Clean project sources before building.
+	-q,--premake4                           Use premake4
 	]]
-
-	-- Setup the target
-	local target = args.target or ""
-	if not ContainsKey( Targets, target ) then
-		error( "Invalid target: " .. target )
-	end
 
 	-- Setup the build configuration
 	local build = args.build or ""
@@ -452,20 +475,32 @@ function main()
 	end
 
 	-- Setup the Premake extra arguments
-	local premakeArgs = ""
+	local premakeOptions = ""
 	if args.premake and args.premake ~= "none" then
-		premakeArgs = args.premake
+		premakeOptions = args.premake
 	end
 
+	local premakeArgs = ""
 	if args.teamcity and args.teamcity ~= "false" then
-		premakeArgs = premakeArgs .. " --teamcity"
+		if args.premake4 then
+			premakeArgs = "teamcity"
+		else
+			premakeArgs = "--teamcity"
+		end
 	end
 
 	-- Generate the project files
-	GenerateProjectFiles( target, premakeArgs )
+	local target = args.target or "none"
+	if target ~= "none" then
+		if not ContainsKey( Targets, target ) then
+			error( "Invalid target: " .. target )
+		end
 
-	-- Actually build project
-	Targets[ target ]( build, shouldClean )
+		GenerateProjectFiles( target, premakeOptions, premakeArgs, args.premake4 )
+
+		-- Actually build project
+		Targets[ target ]( build, shouldClean )
+	end
 
 	-- Optionally build the installer
 	if installer then

@@ -140,8 +140,9 @@ function wx.Configure( package, shouldSetTarget, wxVer )
 		end
 
 		-- Set the linker options.
+		local winWxRuntimePath = "%WXWIN%\\lib\\gcc_dll\\"
 		if target == "cb-gcc" then
-			if options["wx-shared"] then
+			if options["wx-shared"] then				
 				table.insert( package.libpaths, { "$(#WX.lib)/gcc_dll" } )
 			else
 				table.insert( package.libpaths, { "$(#WX.lib)/gcc_lib" } )
@@ -153,6 +154,7 @@ function wx.Configure( package, shouldSetTarget, wxVer )
 				table.insert( package.libpaths, { "$(WXWIN)/lib/gcc_lib" } )
 			end
 		else
+			winWxRuntimePath = "%WXWIN%\\lib\\vc_dll\\"
 			if options["wx-shared"] then
 				table.insert( package.libpaths, { "$(WXWIN)/lib/vc_dll" } )
 			else
@@ -172,21 +174,34 @@ function wx.Configure( package, shouldSetTarget, wxVer )
 		end
 
 		-- Set wxWidgets libraries to link. The order we insert matters for the linker.
+		local releaseWxRuntimeName = "wxmsw"..wx_ver
+		local debugWxRuntimeName = "wxmsw"..wx_ver
 		if options["unicode"] then
-			table.insert( package.config["Debug"].links, { "wxmsw"..wx_ver.."ud", "wxexpatd", "wxjpegd", "wxpngd",
-												"wxregexud", "wxtiffd", "wxzlibd" } )
+			releaseWxRuntimeName = releaseWxRuntimeName .. "u"
+			debugWxRuntimeName = debugWxRuntimeName .. "ud"
+			table.insert( package.config["Debug"].links, { debugWxRuntimeName, "wxexpatd", "wxjpegd", "wxpngd", "wxregexud", "wxtiffd", "wxzlibd" } )
 			table.insert( package.config["Debug"].links, winLibs )
-			table.insert( package.config["Release"].links, { "wxmsw"..wx_ver.."u", "wxexpat", "wxjpeg", "wxpng", "wxregexu",
-												"wxtiff", "wxzlib" } )
+			table.insert( package.config["Release"].links, { releaseWxRuntimeName, "wxexpat", "wxjpeg", "wxpng", "wxregexu", "wxtiff", "wxzlib" } )
 			table.insert( package.config["Release"].links, winLibs )
 		else
-			table.insert( package.config["Debug"].links, { "wxmsw"..wx_ver.."d", "wxexpatd", "wxjpegd", "wxpngd", "wxregexd",
-												"wxtiffd", "wxzlibd" } )
+			debugWxRuntimeName = debugWxRuntimeName .. "d"
+			table.insert( package.config["Debug"].links, { debugWxRuntimeName, "wxexpatd", "wxjpegd", "wxpngd", "wxregexd",	"wxtiffd", "wxzlibd" } )
 			table.insert( package.config["Debug"].links, winLibs )
-			table.insert( package.config["Release"].links, { "wxmsw"..wx_ver, "wxexpat", "wxjpeg", "wxpng", "wxregex",
-												"wxtiff", "wxzlib" } )
+			table.insert( package.config["Release"].links, { releaseWxRuntimeName, "wxexpat", "wxjpeg", "wxpng", "wxregex",	"wxtiff", "wxzlib" } )
 			table.insert( package.config["Release"].links, winLibs )
 		end
+		
+		if target and (target:find( "gcc" ) or target == "gnu") then
+			releaseWxRuntimeName = releaseWxRuntimeName .. "_gcc"
+			debugWxRuntimeName = debugWxRuntimeName .. "_gcc"
+		elseif target and ( target:find( "vs" ) ) then
+			releaseWxRuntimeName = releaseWxRuntimeName .. "_vc"
+			debugWxRuntimeName = debugWxRuntimeName .. "_vc"
+		end
+		
+		releaseWxRuntimeName = releaseWxRuntimeName .. ".dll"
+		debugWxRuntimeName = debugWxRuntimeName .. ".dll"
+		
 
 		-- Set the Windows defines.
 		table.insert( package.defines, { "__WXMSW__" } )
@@ -213,6 +228,12 @@ function wx.Configure( package, shouldSetTarget, wxVer )
 				end
 			end
 		end
+		
+		if options["wx-shared"] then
+			os.mkdir( package.bindir or project.bindir )
+			WindowsCopy( winWxRuntimePath .. releaseWxRuntimeName, package.bindir or project.bindir )
+			WindowsCopy( winWxRuntimePath .. debugWxRuntimeName, package.bindir or project.bindir )
+		end
 	else
 	-- ******* LINUX SETUP *************
 	-- *	Settings that are Linux specific.
@@ -225,8 +246,8 @@ function wx.Configure( package, shouldSetTarget, wxVer )
 		table.insert( package.config["Release"].buildoptions, { "`wx-config --debug=no --cflags`" } )
 
 		-- Set the wxWidgets link options.
-		table.insert( package.config["Debug"].linkoptions, { "`wx-config --debug=yes --libs std, gl, media`" } )
-		table.insert( package.config["Release"].linkoptions, { "`wx-config --libs std, gl, media`" } )
+		table.insert( package.config["Debug"].linkoptions, { "`wx-config --debug=yes --libs std, gl`" } )
+		table.insert( package.config["Release"].linkoptions, { "`wx-config --libs std, gl`" } )
 
 		-- Set the Linux defines.
 		table.insert( package.defines, "__WXGTK__" )

@@ -3,22 +3,30 @@ require("lfs")
 local qtDirectory = ""
 qtDirectory = arg[3] or qtDirectory
 
+function BuildErrorWarningString( line, isError, message, code )
+	if windows then
+		return string.format( "build\\qtprebuild.lua(%i): %s %i: %s", line, isError and "error" or "warning", code, message )
+	else
+		return string.format( "build\\qtprebuild.lua:%i: %s: %s", line, isError and "error" or "warning", message )
+	end
+end
+
 --Make sure there are at least 2 arguments
 if not ( #arg >= 2 ) then
-	print( BuildErrorWarningString( debug.getinfo(1).currentline, true, "There must be at least 2 arguments supplied", 2 ) )
+	print( BuildErrorWarningString( debug.getinfo(1).currentline, true, "There must be at least 2 arguments supplied", 2 ) ); io.stdout:flush()
 	return
 end
 
 --Checks that the first argument is either "-moc", "-uic", or "-rcc"
 if not ( arg[1] == "-moc" or arg[1] == "-uic" or arg[1] == "-rcc" ) then
-	print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[The first argument must be "-moc", "-uic", or "-rcc"]], 3 ) )
+	print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[The first argument must be "-moc", "-uic", or "-rcc"]], 3 ) ); io.stdout:flush()
 	return
 end
 
 --Make sure input file exists
 inputFileModTime = lfs.attributes( arg[2], "modification" )
 if inputFileModTime == nil then
-	print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[The supplied input file ]]..arg[2]..[[, does not exist]], 4 ) )
+	print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[The supplied input file ]]..arg[2]..[[, does not exist]], 4 ) ); io.stdout:flush()
 	return
 end
 
@@ -46,14 +54,6 @@ else
 	qtMocExe = "moc"
 	qtUICExe = "uic"
 	qtQRCExe = "rcc"
-end
-
-function BuildErrorWarningString( line, isError, message, code )
-	if windows then
-		return string.format( "build\\qtprebuild.lua(%i): %s %i: %s", line, isError and "error" or "warning", code, message )
-	else
-		return string.format( "build\\qtprebuild.lua:%i: %s: %s", line, isError and "error" or "warning", message )
-	end
 end
 
 function GetFileNameNoExtFromPath( path )
@@ -91,14 +91,14 @@ if arg[1] == "-moc" then
 
 	outputFileModTime = lfs.attributes( outputFileName, "modification" )
 	if outputFileModTime ~= nil and ( inputFileModTime < outputFileModTime ) then
-		print( outputFileName.." is up-to-date, not regenerating" )
+		print( outputFileName.." is up-to-date, not regenerating" ); io.stdout:flush()
 		return
 	end
 
 	if( 0 ~= os.execute( qtMocExe.." \""..arg[2].."\" -o \""..outputFileName.."\"" ) ) then
-		print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[MOC Failed to generate ]]..outputFileName, 5 ) )
+		print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[MOC Failed to generate ]]..outputFileName, 5 ) ); io.stdout:flush()
 	else
-		print( "MOC Created "..outputFileName )
+		print( "MOC Created "..outputFileName ); io.stdout:flush()
 	end
 elseif arg[1] == "-rcc" then
 	lfs.mkdir( qtQRCOutputDirectory )
@@ -106,14 +106,14 @@ elseif arg[1] == "-rcc" then
 
 	outputFileModTime = lfs.attributes( outputFileName, "modification" )
 	if outputFileModTime ~= nil and ( inputFileModTime < outputFileModTime ) then
-		print( outputFileName.." is up-to-date, not regenerating" )
+		print( outputFileName.." is up-to-date, not regenerating" ); io.stdout:flush()
 		return
 	end
 
 	if( 0 ~= os.execute( qtQRCExe.." -name \""..GetFileNameNoExtFromPath( arg[2] ).."\" \""..arg[2].."\" -o \""..outputFileName.."\"" ) ) then
-		print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[RCC Failed to generate ]]..outputFileName, 6 ) )
+		print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[RCC Failed to generate ]]..outputFileName, 6 ) ); io.stdout:flush()
 	else
-		print( "RCC Created "..outputFileName )
+		print( "RCC Created "..outputFileName ); io.stdout:flush()
 	end
 elseif arg[1] == "-uic" then
 	lfs.mkdir( qtUIOutputDirectory )
@@ -121,14 +121,14 @@ elseif arg[1] == "-uic" then
 
 	outputFileModTime = lfs.attributes( outputFileName, "modification" )
 	if outputFileModTime ~= nil and ( inputFileModTime < outputFileModTime ) then
-		print( outputFileName.." is up-to-date, not regenerating" )
+		print( outputFileName.." is up-to-date, not regenerating" ); io.stdout:flush()
 		return
 	end
 
 	if( 0 ~= os.execute( qtUICExe.." \""..arg[2].."\" -o \""..outputFileName.."\"" ) ) then
-		print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[UIC Failed to generate ]]..outputFileName, 7 ) )
+		print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[UIC Failed to generate ]]..outputFileName, 7 ) ); io.stdout:flush()
 	else
-		print( "UIC Created "..outputFileName )
+		print( "UIC Created "..outputFileName ); io.stdout:flush()
 	end
 end
 
