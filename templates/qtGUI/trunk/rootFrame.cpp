@@ -6,8 +6,7 @@ $("#")include "$(ProjectName)Frame.h"
 $("#")include "$(ProjectName)Version.h"
 
 $(ProjectName)Frame::$(ProjectName)Frame( QWidget* parent ) :
-	QMainWindow( parent ),
-	$(ProjectName)FrameBase( parent )
+	QMainWindow( parent )
 {
 	setupUi( this );
 	
