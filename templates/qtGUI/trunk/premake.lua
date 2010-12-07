@@ -1,36 +1,35 @@
 -- ----------------------------------------------------------------------------
---	Premake script for Mobileye data visualizer plugin.
---	Author:		Tim Bochenek <Tim.Bochenek@gentex.com>
---	Date:		09/08/2010
+--	Premake script to build $(ProjectName).
+--	Author:		$(UserName)
+--	Date:		$(Date)
 --	Version:	1.00
 --
 --	Notes:
 -- ----------------------------------------------------------------------------
 
+-- INCLUDES -------------------------------------------------------------------
+--
 dofile( "build/presets.lua")
-dofile( "build/qtpresets.lua" )
 dofile( "build/boostpresets.lua")
-dofile( "build/unittestpresets.lua")
+dofile( "build/qtpresets.lua" )
 
-EnableOption( "qt-shared" )
-EnableOption( "qt-copy-debug" )
---EnableOption( "boost-shared" )
-EnableOption( "dynamic-runtime" )
-EnableOption( "no-extra-warnings" )
---EnableOption( "devicecomm-shared" )
---EnableOption( "lua-shared" )
---EnableOption( "loki-shared" )
-EnableOption( "no-boost-logging" )
-EnableOption( "with-mobileye" )
+-- OPTIONS --------------------------------------------------------------------
+--
+addoption( "dynamic-runtime", "Use the dynamicly loadable version of the runtime." )
 
 -- PROJECT SETTINGS -----------------------------------------------------------
-project.name								= "MobileyeVisualizer"
+--
+project.name								= "$(ProjectName)"
 project.bindir								= "bin"
 project.libdir								= "lib"
 
+-- force options
+EnableOption( "unicode" )
+EnableOption( "dynamic-runtime" )
+EnableOption( "qt-shared" )
+--EnableOption( "qt-copy-debug" )
+--EnableOption( "boost-shared" )
+
 -- PACKAGES -------------------------------------------------------------------
-dopackage( "MobileyeVisualizer.lua" )
-dopackage( "loki/loki.lua" )
-dopackage( "lua/lualib.lua" )
-dopackage( "devicecomm/devicecomm.lua" )
-dopackage( "boost_utils/boost_utils.lua" )
+--
+dopackage( "$(ProjectName).lua" )
