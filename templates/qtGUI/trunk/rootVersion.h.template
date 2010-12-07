@@ -1,7 +1,7 @@
 $("#")ifndef __$(ProjectName:upper())VERSION__
 $("#")define __$(ProjectName:upper())VERSION__
 
-#define $(ProjectName:upper())_SVN_REVISION $WCREV$
-#define $(ProjectName:upper())_SVN_REVISION_STRING "$WCREV$"
+#define $(ProjectName:upper())_SVN_REVISION $("$")WCREV$("$")
+#define $(ProjectName:upper())_SVN_REVISION_STRING "$("$")WCREV$("$")"
 
 #endif //__$(ProjectName:upper())VERSION__
