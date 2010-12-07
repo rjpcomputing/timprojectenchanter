@@ -27,7 +27,7 @@ package.links								= {
 
 											  }
 
-MakeVersion( "$(ProjectName)Version.h" )
+MakeVersion( package, "$(ProjectName)Version.h" )
 
 -- PACKAGE SETUP --------------------------------------------------------------
 --
