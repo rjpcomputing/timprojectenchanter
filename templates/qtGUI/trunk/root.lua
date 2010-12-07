@@ -1,64 +1,38 @@
 -- ----------------------------------------------------------------------------
---	Premake script for Mobileye data visualizer plugin.
---	Author:		Tim Bochenek <Tim.Bochenek@gentex.com>
---	Date:		09/08/2010
+--	Premake script for $(ProjectName).
+--	Author:		$(UserName)
+--	Date:		$(Date)
 --	Version:	1.00
 --
 --	Notes:
 -- ----------------------------------------------------------------------------
 
--- PROJECT CONFIGURATION -------------------------------------------------------
-package.name						= "MobileyeVisualizer"
-package.kind						= "winexe"
-package.files						= 	{ 	matchfiles( "*.cpp", "*.hpp", "*.h", "*.lua", "inc/*.h", "pgm/*", "clipread.lib" ) }
+-- GENERAL SETUP -------------------------------------------------------------
+--
+package.name								= project.name
 
-package.defines						= 	{ "CRB_GUI_EXTENSION", "QT_CORE_LIB" }
-if options["boost-shared"] then
-	table.insert( package.defines, "BOOST_UTILS_USING_DLL" )
-end
+-- UNIT TESTING SETTING --------------------------------------------------------
+--
+package.kind								= "winexe"
 
-if options["devicecomm-shared"] then
-	table.insert( package.defines, "DEVICECOMM_USING_DLL" )
-end
+package.files								= {
+												matchfiles( "*.cpp", "*.h", "*.lua", "*.ui" )
+											  }
 
-if options["lua-shared"] and string.find( target or "", "vs20" ) then
-	table.insert( package.defines, "LUA_BUILD_AS_DLL" )
-end
+package.includepaths						= {
 
-if options["loki-shared"] then
-	table.insert( package.defines, "LOKI_DLL" )
-end
+											  }
 
-package.links						= 	{ 	"DeviceComm", "Loki", "LuaLib", "boost_utils" }
+package.links								= {
 
-package.includepaths                = 	{
-											"boost_utils", "devicecomm"
-										}
-
-if linux and ( not options["no-origin"] ) then
-	table.insert( package.linkoptions, "-Wl,-rpath,$$``ORIGIN" )
-end
-
-MakeVersion( package, "install/windows/" .. package.name .. ".iss" )
-MakeVersion( package, "MobileyeVisualizerVersion.h" )
+											  }
 
 -- PACKAGE SETUP --------------------------------------------------------------
+--
+--boost.Configure( package, { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
 Configure( package )
-local mocfiles				= { "DirMonitorHooks.h", "mainwindow.h", "MobileyeWidget.h" }
-local qrcfiles				= {  }
-local uifiles				= { matchfiles( "*.ui" ) }
+local mocFiles				= { "$(ProjectName)Frame.h" }
+local qrcFiles				= { matchfiles( "*.qrc" ) }
+local uiFiles				= { matchfiles( "*.ui" ) }
 local libsToLink			= { "Core", "Gui" }
-local qtMajorRev			= 4
-local qtPrebuildPath		= "build/qtprebuild.lua"
-local copyDynamicLibraries	= nil
-qt.Configure( package, mocfiles, qrcfiles, uifiles, libsToLink, qtMajorRev, qtPrebuildPath, copyDynamicLibraries )
-local boostlibs = { "iostreams", "date_time", "filesystem", "regex", "serialization", "signals", "system", "thread", "wserialization" }
-if windows then
-	table.insert( boostlibs, "zlib" )
-	table.insert( boostlibs, "bzip2" )
-end
-boost.Configure( package, boostlibs )
-if options["boost-shared"] then
-	boost.CopyDynamicLibraries( boostlibs, project.bindir )
-end
-unittest.Configure (package, matchrecursive("tests/*.cc", "tests/*.hh"), { "main.cpp" }, true )
+qt.Configure( package, mocFiles, qrcFiles, uiFiles, libsToLink )
