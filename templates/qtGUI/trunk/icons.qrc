@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="icons">
+    <file>res/root.ico</file>
+    <file>res/root16x16.xpm</file>
+    <file>res/root32x32.xpm</file>
+  </qresource>
+</RCC>
