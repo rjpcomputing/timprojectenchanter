@@ -51,6 +51,8 @@ function wx.Configure( shouldSetTarget, wxVer, copyDlls )
 		defines { "wxUSE_NO_MANIFEST=1" } -- Not needed in wxWidgets 2.8.8.
 	end
 
+	local kindVal = presets.GetCustomValue( "kind" ) or ""
+
 	if "windows" == os.get() then
 		-- ******* WINDOWS SETUP ***********
 		-- *	Settings that are Windows specific.
@@ -234,7 +236,7 @@ function wx.Configure( shouldSetTarget, wxVer, copyDlls )
 		defines { "__WXMSW__" }
 		-- Set the targets.
 		if shouldSetTarget then
-			if not ( kind == "WindowedApp" or kind == "ConsoleApp" ) then
+			if not ( kindVal == "WindowedApp" or kindVal == "ConsoleApp" ) then
 				if ActionUsesGCC() then
 					if _OPTIONS["unicode"] then
 						configuration { "Debug" }
@@ -291,7 +293,7 @@ function wx.Configure( shouldSetTarget, wxVer, copyDlls )
 
 		-- Set the targets.
 		if shouldSetTarget then
-			if not ( kind == "WindowedApp" or kind == "ConsoleApp" ) then
+			if not ( kindVal == "WindowedApp" or kindVal == "ConsoleApp" ) then
 				configuration { "Debug" }
 					targetdir { wx.LibName( targetName, wxVer, true ) }	--"`wx-config --debug=yes --basename`_"..targetName.."-`wx-config --release`"
 				configuration { "Release" }
