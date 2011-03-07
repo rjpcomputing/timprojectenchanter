@@ -22,7 +22,7 @@ MakeVersion( "$(ProjectName)Version.h" )
 --boost.Configure( { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
 Configure()
 local mocFiles				= { "$(ProjectName)Frame.h" }
-local qrcFiles				= { matchfiles( "*.qrc" ) }
-local uiFiles				= { matchfiles( "*.ui" ) }
+local qrcFiles				= { os.matchfiles( "*.qrc" ) }
+local uiFiles				= { os.matchfiles( "*.ui" ) }
 local libsToLink			= { "Core", "Gui" }
 qt.Configure( mocFiles, qrcFiles, uiFiles, libsToLink )
