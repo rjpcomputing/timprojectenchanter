@@ -35,4 +35,4 @@ EnableOption( "unicode" )
 
 -- PROJECTS -------------------------------------------------------------------
 --
-dofile	"root4.lua"
+dofile	"$(ProjectName)4.lua"
