@@ -6,17 +6,17 @@
 --
 --	Notes:
 -- ----------------------------------------------------------------------------
-
 -- GENERAL SETUP -------------------------------------------------------------
 --
 project	"$(ProjectName)"
 
 -- UNIT TESTING SETTING --------------------------------------------------------
 --
-kind	"ConsoleApp"
+kind	"WindowedApp"
 files	{ "*.cpp", "*.h", "*.lua", "*.fbp" }
 
 -- PROJECT SETUP --------------------------------------------------------------
 --
 --boost.Configure( { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
+wx.Configure()
 Configure()

@@ -9,8 +9,9 @@
 
 -- INCLUDES -------------------------------------------------------------------
 --
-dofile( "build/presets4.lua")
---dofile( "build/boostpresets4.lua")
+dofile( "build/presets4.lua" )
+dofile( "build/boostpresets4.lua" )
+dofile( "build/qtpresets4.lua" )
 
 -- OPTIONS --------------------------------------------------------------------
 --
@@ -31,7 +32,10 @@ implibdir		"lib"
 
 -- force options
 EnableOption( "unicode" )
-
+EnableOption( "dynamic-runtime" )
+EnableOption( "qt-shared" )
+--EnableOption( "qt-copy-debug" )
+--EnableOption( "boost-shared" )
 
 -- PROJECTS -------------------------------------------------------------------
 --

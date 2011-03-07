@@ -9,8 +9,9 @@
 
 -- INCLUDES -------------------------------------------------------------------
 --
-dofile( "build/presets4.lua")
---dofile( "build/boostpresets4.lua")
+dofile( "build/presets4.lua" )
+dofile( "build/boostpresets4.lua" )
+dofile( "build/wxpresets4.lua" )
 
 -- OPTIONS --------------------------------------------------------------------
 --
