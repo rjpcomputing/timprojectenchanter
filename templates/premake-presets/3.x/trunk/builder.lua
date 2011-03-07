@@ -234,7 +234,7 @@ local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles )
 	-- Launch make to build
 	local makeCmd = ""
 	if IsWindows() then
-		makeCmd = string.format( "%s -j %s %s=%s", make, GetNumberOfProcessors(), configLabel, cfg )
+		makeCmd = string.format( "%s %s=%s", make, configLabel, cfg )
 	else
 		makeCmd = string.format( "%s %s=%s", make, configLabel, cfg )
 	end
@@ -351,6 +351,56 @@ local function ExecuteVs2008Builder( cfg, shouldClean )
 	end
 end
 
+local function ExecuteVs2010Builder( cfg, shouldClean )
+	-- Check parameters
+	if type( cfg ) ~= "string" then
+		error( "bad argument #1 to ExecuteVs2010Builder. (Expected string but recieved "..type( cfg )..")" )
+	end
+	shouldClean = shouldClean or false
+
+	print( "VS2010 Builder invoked." ); io.stdout:flush()
+
+	-- Determine Visual Studio path
+	local vsPath = os.getenv( "VS100COMNTOOLS" ).."..\\IDE\\devenv.com"
+	print( vsPath ); io.stdout:flush()
+	if not FileExists( vsPath ) then
+		vsPath = os.getenv( "VS100COMNTOOLS" ).."..\\IDE\\VCExpress.com"
+		-- Make sure that exists
+		if not FileExists( vsPath ) then
+			error( "Microsoft Visual C++ 2010 (10.0) is not installed on this machine." )
+		end
+	end
+
+	-- Find solution file
+	local solutionFile = FindFirstFile( ".", ".sln" )
+	if not solutionFile then
+		error( "No VS2010 solution file found. Make sure the project files are generated." )
+	end
+	print( "Using solution "..solutionFile ); io.stdout:flush()
+
+	-- Launch vc to clean
+	if shouldClean then
+		print( "Cleaning solution..." ); io.stdout:flush()
+		local cleanCmd = string.format( '""%s" "%s" /clean %s"', vsPath, solutionFile, cfg )
+		local vsRet = os.execute( cleanCmd )
+		--print( "VS2010 clean process exited with code "..( vsRet or "<nil>" ) )
+		if vsRet ~= 0 then
+			print( string.format( "VS2010 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+			os.exit( 1 )
+		end
+	end
+
+	-- Launch vc to build
+	print( "Building solution..." ); io.stdout:flush()
+	local buildString = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
+	local vsRet = os.execute( buildString )
+	--print( "VS2010 build process exited with code "..( vsRet or "<nil>" ) )
+	if vsRet ~= 0 then
+		print( string.format( "VS2010 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+		os.exit( 1 )
+	end
+end
+
 
 local function ExecuteINNOBuilder( file )
 	print( "INNO Setup Installer Builder invoked." ); io.stdout:flush()
@@ -432,6 +482,7 @@ Targets =
   gnu = ExecuteGnuBuilder,
   vs2005 = ExecuteVs2005Builder,
   vs2008 = ExecuteVs2008Builder,
+  vs2010 = ExecuteVs2010Builder,
   gmake = ExecuteGmakeBuilder
 }
 
@@ -445,7 +496,7 @@ function main()
 	local args = pl.lapp [[
 	Builds the current project. Run from the root level.
 
-	-t,--target         (string)            One of the following: vs2005, vs2008, or gnu.
+	-t,--target         (string)            One of the following: vs2005, vs2008, gnu, or gmake.
 	-b,--build          (default Release)   Project-specific build configuration, usually Debug or Release.
 	-i,--installer      (default none)      One of the following: inno or nsis.
 	-f,--installerfile  (default none)      The installer source file to pass to the installer, if needed.
@@ -483,7 +534,8 @@ function main()
 	local premakeArgs = ""
 	if args.teamcity and args.teamcity ~= "false" then
 		if args.premake4 then
-			premakeArgs = "teamcity"
+			--premakeArgs = "teamcity"
+			premakeOptions = premakeOptions .. " --teamcity"
 		else
 			premakeArgs = "--teamcity"
 		end
@@ -494,6 +546,10 @@ function main()
 	if target ~= "none" then
 		if not ContainsKey( Targets, target ) then
 			error( "Invalid target: " .. target )
+		end
+
+		if ( "gnu" == target ) and args.premake4 then
+			target = "gmake"
 		end
 
 		GenerateProjectFiles( target, premakeOptions, premakeArgs, args.premake4 )

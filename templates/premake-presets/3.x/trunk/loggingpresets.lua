@@ -52,16 +52,20 @@ function logging.Configure( pkg, includePath )
 	pkg.defines					= pkg.defines or {}
 	pkg.includepaths			= pkg.includepaths or {}
 
-	
+
 	if includePath then
-		AddSystemPath( pkg, includePath )	
+		AddSystemPath( pkg, includePath )
 	else
-		if "lib" == pkg.kind then
-			AddSystemPath( pkg, "../log4cplus/include" )	
+		if "lib" == pkg.kind or "dll" == pkg.kind then
+			AddSystemPath( pkg, "../log4cplus/include" )
 		else
-			AddSystemPath( pkg, "log4cplus/include" )	
+			AddSystemPath( pkg, "log4cplus/include" )
 		end
 	end
-	
-	table.insert( pkg.links, "Log4CPlus" )	
+
+	table.insert( pkg.links, "Log4CPlus" )
+
+	if options["log4cplus-shared"] then
+		table.insert( pkg, "LOG4CPLUS_BUILD_DLL" )
+	end
 end

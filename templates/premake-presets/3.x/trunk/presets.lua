@@ -28,6 +28,8 @@
 --		- call Configure() after your project is setup, not before.
 -- ----------------------------------------------------------------------------
 
+_PROJECT_DIR = os.getcwd()
+
 -- OPTIONS -------------------------------------------------------------------
 --
 addoption( "dynamic-runtime", "Use the dynamically loadable version of the runtime." )
@@ -450,6 +452,32 @@ function MakeVersion( pkg, nameOfFile, workingDirectory )
 	end
 end
 
+function PrebuildGUI(fbpFilename)
+  if options["help"] or options["version"] then
+    return
+  end
+
+	workingDirectory = workingDirectory or "./"
+	local formBuilder
+	if windows then
+		local programFiles = os.getenv( "ProgramFiles" )
+		formBuilder = programFiles .. [[\wxFormBuilder\wxFormBuilder.exe]]
+		if not os.fileexists( formBuilder )  then
+		print(formBuilder)
+			-- wxFormBuilder is not installed in the default location, so now it is required
+			-- to be their PATH.
+			formBuilder = "wxFormBuilder.exe"
+		end
+	else
+		formBuilder = "wxformbuilder"
+	end
+
+	local command = '""' .. formBuilder .. '" /g ' .. '"' .. fbpFilename .. '""'
+  print( command ); io.stdout:flush()
+  os.execute( command )
+end
+
+
 function WindowsCopy( sourcePath, destinationDirectory )
 	if windows then
 		local command = 'copy ' .. sourcePath .. ' "' .. destinationDirectory .. '" /B /V /Y'
@@ -496,4 +524,94 @@ function CopyCRT( destinationDirectory, copyDebugCRT )
 			end
 		end
 	end
+end
+
+function SolutionTargetDir()
+	return _PROJECT_DIR .. "/" .. (project.bindir or "bin")
+end
+
+function Flatten(t)
+        local tmp = {}
+        for si,sv in ipairs(t) do
+			if type( sv ) == "table" then
+                for _,v in ipairs(sv) do
+                        table.insert(tmp, v)
+                end
+			elseif type( sv ) == "string" then
+				table.insert( tmp, sv )
+			end
+                t[si] = nil
+        end
+        for _,v in ipairs(tmp) do
+                table.insert(t, v)
+        end
+end
+
+--[[This function returns a deep copy of a given table.
+	The function below also copies the metatable to the new table if there is one,
+	so the behaviour of the copied table is the same as the original. ]]
+function deepcopy(object)
+    local lookup_table = {}
+    local function _copy(object)
+        if type(object) ~= "table" then
+            return object
+        elseif lookup_table[object] then
+            return lookup_table[object]
+        end
+        local new_table = {}
+        lookup_table[object] = new_table
+        for index, value in pairs(object) do
+            new_table[_copy(index)] = _copy(value)
+        end
+--        return setmetatable(new_table, getmetatable(object))
+        return setmetatable( new_table, _copy( getmetatable( object ) ) )
+    end
+    return _copy(object)
+end
+
+function GetDirNameFromFile( file )
+
+	local i = 0
+	local lastSlash = 0
+	local dirName
+
+	while true do
+		i = string.find( file, "/", i+1 )
+		if i == nil then break end
+		lastSlash = i
+	end
+
+	dirName = file:sub( 0, lastSlash - 1  )
+
+	return dirName
+
+end
+
+function GetFileNameNoExtFromPath( path )
+
+	local i = 0
+	local lastSlash = 0
+	local lastPeriod = 0
+	local returnFilename
+	while true do
+		i = string.find( path, "/", i+1 )
+		if i == nil then break end
+		lastSlash = i
+	end
+
+	i = 0
+
+	while true do
+		i = string.find( path, "%.", i+1 )
+		if i == nil then break end
+		lastPeriod = i
+	end
+
+	if lastPeriod < lastSlash then
+		returnFilename = path:sub( lastSlash + 1 )
+	else
+		returnFilename = path:sub( lastSlash + 1, lastPeriod - 1 )
+	end
+
+	return returnFilename
 end
