@@ -322,10 +322,13 @@ function TimGUI.OnCreateProjectClicked( event )
 	TimGUI.logTextCtrl:Clear()
 
 	local projName  = TimGUI.projectNameTextCtrl:GetValue()
+	if string.len( projName ) == 0 then
+		projName = "project"
+	end
 	local path = TimGUI.projectDestinationDirPicker:GetPath()
 
 	local scPath = TimGUI.sourceControlLocationTextCtrl:GetValue()
-	local tail = string.sub(scPath, -1, -1)
+	local tail = string.sub( scPath, -1, -1 )
 	if tail ~= "/" then
 		scPath = scPath .. "/"
 	end
@@ -358,7 +361,7 @@ function TimGUI.OnCreateProjectClicked( event )
 	end
 
 	print( "-- Fill in the template" )
-	local err, message = pcall( TemplateReplace, { ProjectName = TimGUI.projectNameTextCtrl:GetValue() }, path .. "/" .. projName )
+	local err, message = pcall( TemplateReplace, { ProjectName = projName }, path .. "/" .. projName )
 	wx.wxSafeYield()	-- Updates the GUI log
     if not err then
         wx.wxEndBusyCursor()
