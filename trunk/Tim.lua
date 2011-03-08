@@ -323,14 +323,23 @@ function TimGUI.OnCreateProjectClicked( event )
 
 	local projName  = TimGUI.projectNameTextCtrl:GetValue()
 	local path = TimGUI.projectDestinationDirPicker:GetPath()
-	-- Issue #11:  make a trunk directory for the project.  It's why we concatenate the "/trunk"
-	local scPath = TimGUI.sourceControlLocationTextCtrl:GetValue() .. "/trunk"
+
+	local scPath = TimGUI.sourceControlLocationTextCtrl:GetValue()
+	local tail = string.sub(scPath, -1, -1)
+	if tail ~= "/" then
+		scPath = scPath .. "/"
+	end
+	-- Issue #10:  use project name to create directory in subversion
+	scPath = scPath .. projName
+	-- Issue #11:  make a trunk directory for the project
+	scPath = scPath .. "/trunk"
 	local template = Settings.Templates[TimGUI.projectTypeChoice:GetStringSelection()]
 
 	-- Debugging info
 	--[[
 	print( 'ProjectName:', projName )
 	print( 'Local Path:', path )
+	print( 'Tail:', tail )
 	print( 'Source Control Path:', scPath )
 	print( 'Template Location:', template )
 	]]
