@@ -323,7 +323,8 @@ function TimGUI.OnCreateProjectClicked( event )
 
 	local projName  = TimGUI.projectNameTextCtrl:GetValue()
 	local path = TimGUI.projectDestinationDirPicker:GetPath()
-	local scPath = TimGUI.sourceControlLocationTextCtrl:GetValue()
+	-- Issue #11:  make a trunk directory for the project.  It's why we concatenate the "/trunk"
+	local scPath = TimGUI.sourceControlLocationTextCtrl:GetValue() .. "/trunk"
 	local template = Settings.Templates[TimGUI.projectTypeChoice:GetStringSelection()]
 
 	-- Debugging info
@@ -340,13 +341,13 @@ function TimGUI.OnCreateProjectClicked( event )
 	print( "-- Export "..template )
 	print( sc:Export() )
 	wx.wxSafeYield()	-- Updates the GUI log
-	
+
 	if arg[1] ~= "--no-version-control" then
 		print( "-- Make '"..path.."' a working copy" )
 		print( sc:MakeWorkingCopy() )
 		wx.wxSafeYield()	-- Updates the GUI log
 	end
-	
+
 	print( "-- Fill in the template" )
 	local err, message = pcall( TemplateReplace, { ProjectName = TimGUI.projectNameTextCtrl:GetValue() }, path .. "/" .. projName )
 	wx.wxSafeYield()	-- Updates the GUI log
@@ -357,7 +358,7 @@ function TimGUI.OnCreateProjectClicked( event )
         print( errMsg )
         return
     end
-	
+
 	if arg[1] ~= "--no-version-control" then
 		print( "-- Add files" )
 		print( sc:AddFiles() )
@@ -374,7 +375,7 @@ function TimGUI.OnCreateProjectClicked( event )
 		print( "-- Update "..path.." to complete and get the latest changes" )
 		print( sc:Update() )
 	end
-	
+
 	wx.wxEndBusyCursor()
     wx.wxMessageBox( "Project creation completed successfully...")
 	wx.wxLogStatus( TimGUI.frame, "Project creation complete..." )
