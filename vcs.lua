@@ -4,6 +4,7 @@ module( "vcs", package.seeall )
 --
 local lfs = require( "lfs" )
 require( "shell" )
+require( "SubLua" )
 
 -- CONFIGURATION --------------------------------------------------------------
 --
@@ -45,6 +46,8 @@ end
 
 -- VersionControlSystem CLASS --------------------------------------------------------
 --
+local svnTim = SubLua.new()
+
 vcs.VersionControlSystem =
 {
 	projectName		= nil,
@@ -131,44 +134,71 @@ function VersionControlSystem:Export( templatePath, localPath )
 	localPath		= localPath or self:GetLocalPath()
 
 	-- Get all the files out of the template.
+	--[[   -- old method using a shell call
 	local options = { "export", "--force", "--ignore-externals", templatePath, localPath }
 	local status, retVal = shell[Settings.sourceControlExecutable]( options )
+	]]
+
+	svnTim:Export( templatePath, localPath, { force=true, ignore_externals=true } )
 
 	-- Get the root directories externals.
+	--[[   -- old method using a shell call
 	options = { "propget", "svn:externals", templatePath }
 	local status, externals = shell[Settings.sourceControlExecutable]( options )
+	]]
+
+	print( "--Getting externals:" )
+	externals = svnTim:PropGet( "svn:externals", templatePath )
 
 	-- Write a tmp file containing the externals.
-	if #externals > 0 then
-		local fHandle = io.output( localPath .. "/svn-props.tmp" )
-		fHandle:write( externals )
-		fHandle:close()
+	local fHandle = io.output( localPath .. "/svn-props.tmp" )
+	for i, value in pairs( externals ) do
+		print( " ", i, value )
+		fHandle:write( value )
 	end
+	fHandle:close()
 
-	return retVal
+	--return retVal
 end
 
 ---	Makes a home location for the project in the repository. It also checks the empty home out to the local
 --	working copy.
 --	@param scPath The path to create in the repository for the project.
 --	@param localPath The local path to make a working copy.
-function VersionControlSystem:MakeWorkingCopy( scPath, localPath )
+--  @param index The index of the type of project to build (console, qt, wx)
+function VersionControlSystem:MakeWorkingCopy( scPath, localPath, index )
 	scPath			= scPath or self:GetDestinationPath()
 	localPath		= localPath or self:GetLocalPath()
 	local logMsg	= ""
 
 	-- Create repository location
 	local comment = "Created directories automatically."
-	local options = { "mkdir", "--parents", --[["--non-interactive",]] scPath, "-m", comment }
+	--[[   -- old method using a shell call
+	local options = { "mkdir", "--parents", "--non-interactive", scPath, "-m", comment }
 	local status, logMsg = shell[Settings.sourceControlExecutable]( options )
+	]]
 
+	-- Issue #11:  make a trunk directory for the project.  Make the first directory without the /trunk suffix.
+	if string.sub( scPath, -5, -1 ) == "trunk" then
+		svnTim:MkDir( string.sub( scPath, 1, -7 ), comment )
+	end
+	svnTim:MkDir( scPath, comment )
+	--need the /res folder for wx and qt projects ( console projects have index 0 )
+	if index > 0 then
+		svnTim:MkDir( scPath.."/res", comment )
+	end
+
+	--[[   -- old method using a shell call
 	if logMsg:match( "failed" ) then error( logMsg ) end
-	-- Checkout to the local path.
-	options = { "checkout", "--force", --[["--non-interactive",]] scPath, localPath }
+	--Checkout to the local path.
+	options = { "checkout", "--force", "--non-interactive", scPath, localPath }
 	local status, retVal = shell[Settings.sourceControlExecutable]( options )
 
 	logMsg = logMsg.."\n"..retVal
 	if logMsg:match( "authorization failed" ) then	error( logMsg ) end
+	]]
+
+	svnTim:Checkout( scPath, localPath, { force=true } )
 
 	return logMsg
 end
@@ -179,20 +209,26 @@ function VersionControlSystem:Commit( localPath, scPath )
 
 	-- Commit the changes to create the fresh project.
 	local comment = "Initial import created by Tim the Project Enchanter."
-	local options = { "commit", --[["--non-interactive",]] localPath, "-m", comment }
+	--[[   -- old method using a shell call
+	local options = { "commit", "--non-interactive", localPath, "-m", comment }
 	local status, logMsg = shell[Settings.sourceControlExecutable]( options )
+	]]
+	svnTim:Commit( localPath, comment )
 
-	return logMsg
+	--return logMsg
 end
 
 function VersionControlSystem:Update( localPath )
 	localPath = localPath or self:GetLocalPath()
 
 	-- Update the WC.
-	local options = { "update", --[["--non-interactive",]] localPath }
+	--[[   -- old method using a shell call
+	local options = { "update", "--non-interactive", localPath }
 	local status, logMsg = shell[Settings.sourceControlExecutable]( options )
+	]]
+	svnTim:Update( localPath )
 
-	return logMsg
+	--return logMsg
 end
 
 function VersionControlSystem:AddFiles( localPath )
@@ -202,16 +238,19 @@ function VersionControlSystem:AddFiles( localPath )
 	for file in lfs.dir( localPath ) do
 		if file ~= "." and file ~= ".." and file ~= ".svn" and file ~= "svn-props.tmp" then
 			local f = localPath..'/'..file
-			--print( "\t "..f )
+			print( "\t"..f )
 			local attr = lfs.attributes( f )
 			assert( type( attr ) == "table" )
 			if attr.mode == "directory" then
 				VersionControlSystem:AddFiles( f )
 			else
 				-- Add the file
-				local options = { "add", "--parents", --[["--non-interactive",]] f }
+				--[[   -- old method using a shell call
+				local options = { "add", "--parents", "--non-interactive", f }
 				local status, msg = shell[Settings.sourceControlExecutable]( options )
 				logMsg = logMsg..msg
+				]]
+				svnTim:Add( f,  { add_parents } )
 			end
 		end
 	end
@@ -227,8 +266,19 @@ function VersionControlSystem:SetProperty( property, localPath )
 	-- Get the root directories externals.
 	local propFile = localPath.."/svn-props.tmp"
 	if exists( propFile ) then
+		--[[   -- old method using a shell call
 		local options = { "propset", property, "--file", propFile, localPath }
 		status, retVal = shell[Settings.sourceControlExecutable]( options )
+		]]
+
+		local fHandle = io.input( localPath .. "/svn-props.tmp" )
+		propValue = fHandle:read( "*all" )
+		fHandle:close()
+
+		print( "   Property:", property )
+		print( "   Property Value:", propValue )
+		print( "   Path:", localPath )
+		svnTim:PropSet( property, propValue, localPath, { recurse=false } )
 		os.remove( propFile )
 	end
 
