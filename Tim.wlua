@@ -55,7 +55,7 @@ local function iff( cond, a, b )
 end
 
 -- Generate a unique new wxWindowID
-local function NewID()
+function NewID()
     ID_IDCOUNTER = ( ID_IDCOUNTER or wx.wxID_HIGHEST ) + 1
     return ID_IDCOUNTER
 end
@@ -162,6 +162,7 @@ local TimGUI =
 	ID_SOURCE_CONTROL_OPEN_BUTTON		= NewID(),
 	ID_PROJECT_NAME_TEXTCTRL			= NewID(),
 	ID_PROJECT_DESTINATION_DIR_PICKER	= NewID(),
+	ID_PREFERENCES_BUTTON				= NewID(),
 	ID_CREATE_PROJECT_BUTTON			= NewID(),
 	ID_PROJECT_TYPE_CHOICE				= NewID(),
 	ID_LOG_TEXTCTRL						= NewID(),
@@ -313,6 +314,26 @@ function TimGUI.OnAbout( event )
     wx.wxAboutBox(info)
 end
 
+function TimGUI.OnPreferencesClicked( event )
+	local dlg = wx.wxDialog(wx.NULL, wx.wxID_ANY, "Preferences", wx.wxDefaultPosition, wx.wxSize( 278,150 ), wx.wxDEFAULT_DIALOG_STYLE)
+	dlg:SetIcon( Resources.GetAppIcon() )
+	local mainSizer = wx.wxBoxSizer( wx.wxVERTICAL )
+
+
+	local okSizer = wx.wxStdDialogButtonSizer()
+	local okButton = wx.wxButton( dlg, wx.wxID_OK, "OK" )
+	okSizer:AddButton( okButton )
+	local cancelButton = wx.wxButton( dlg, wx.wxID_CANCEL, "Cancel" )
+	okSizer:AddButton( cancelButton )
+	okSizer:Realize()
+	mainSizer:Add( okSizer, 1, wx.wxEXPAND, 5 )
+	dlg:SetSizer( mainSizer )
+
+	if dlg:ShowModal() == wx.wxID_OK then
+		-- Set the preferences
+	end
+end
+
 function TimGUI.OnCreateProjectClicked( event )
 	-- Display the wait cursor to show work is being done.
 	wx.wxBeginBusyCursor()
@@ -360,7 +381,7 @@ function TimGUI.OnCreateProjectClicked( event )
 		wx.wxSafeYield()	-- Updates the GUI log
 	end
 
-	print( "-- Fill in the template" )
+	print( "\n-- Fill in the template" )
 	local err, message = pcall( TemplateReplace, { ProjectName = projName }, path .. "/" .. projName )
 	wx.wxSafeYield()	-- Updates the GUI log
     if not err then
@@ -372,19 +393,23 @@ function TimGUI.OnCreateProjectClicked( event )
     end
 
 	if arg[1] ~= "--no-version-control" then
-		print( "-- Add files" )
+		print( "\n-- Add files to revision control" )
 		sc:AddFiles()
 		wx.wxSafeYield()	-- Updates the GUI log
 
-		print( "-- Add the externals" )
+		if companyLib and companyLib.AddCompanySpecificLibraries then
+			companyLib.AddCompanySpecificLibraries( TimGUI, sc )
+		end
+
+		print( "\n-- Set the externals" )
 		sc:SetProperty( "svn:externals" )
 		wx.wxSafeYield()	-- Updates the GUI log
 
-		print( "-- Commit to "..scPath )
+		print( "\n-- Commit to "..scPath )
 		sc:Commit()
 		wx.wxSafeYield()	-- Updates the GUI log
 
-		print( "-- Update "..path.." to complete and get the latest changes" )
+		print( "\n-- Update "..path.." to complete and get the latest changes" )
 		sc:Update()
 	end
 
@@ -503,10 +528,18 @@ local function main()
 	TimGUI.projectTypeChoice = wx.wxChoice( TimGUI.panel, TimGUI.ID_PROJECT_TYPE_CHOICE, wx.wxDefaultPosition, wx.wxDefaultSize, templates, 0 )
 	TimGUI.projectTypeChoice:SetSelection( 0 )
 	projectControlSizer:Add( TimGUI.projectTypeChoice, 1, wx.wxALL, 5 )
+	TimGUI.preferencesButton = wx.wxButton( TimGUI.panel, TimGUI.ID_PREFERENCES_BUTTON, "Preferences" )
+	projectControlSizer:Add( TimGUI.preferencesButton, 0, wx.wxALL, 5 )
 	-- Create Project
 	TimGUI.createProjectButton = wx.wxButton( TimGUI.panel, TimGUI.ID_CREATE_PROJECT_BUTTON, "Create Project" )
 	projectControlSizer:Add( TimGUI.createProjectButton, 0, wx.wxALL, 5 )
 	mainSizer:Add( projectControlSizer, 0, wx.wxEXPAND, 5 )
+
+	-- Add company specific portions
+	if companyLib and companyLib.AddCompanySpecificWidgets then
+		companyLib.AddCompanySpecificWidgets( TimGUI, mainSizer )
+	end
+
 	-- Log
 	local sbSizer = wx.wxStaticBoxSizer( wx.wxStaticBox( TimGUI.panel, wx.wxID_ANY, "Log" ), wx.wxVERTICAL )
 	TimGUI.logTextCtrl = wx.wxTextCtrl( TimGUI.panel, TimGUI.ID_LOG_TEXTCTRL,
@@ -538,6 +571,10 @@ local function main()
 	TimGUI.frame:Connect( TimGUI.ID_SOURCE_CONTROL_OPEN_BUTTON, wx.wxEVT_COMMAND_BUTTON_CLICKED,
        TimGUI.OnSourceControlOpenClicked )
 
+	-- Connect the 'Preferences' button event
+	TimGUI.frame:Connect( TimGUI.ID_PREFERENCES_BUTTON, wx.wxEVT_COMMAND_BUTTON_CLICKED,
+        TimGUI.OnPreferencesClicked )
+
 	-- Connect the 'Create Project' button event
 	TimGUI.frame:Connect( TimGUI.ID_CREATE_PROJECT_BUTTON, wx.wxEVT_COMMAND_BUTTON_CLICKED,
         TimGUI.OnCreateProjectClicked )
@@ -557,5 +594,8 @@ local function main()
 	-- otherwise the wxLua program will exit immediately.
 	wx.wxGetApp():MainLoop()
 end
+
+--Assign the company-specific file here
+--dofile( "gentex.lua" )
 
 main()

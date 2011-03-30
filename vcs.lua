@@ -5,6 +5,7 @@ module( "vcs", package.seeall )
 local lfs = require( "lfs" )
 require( "shell" )
 require( "SubLua" )
+require( "Resources" )
 
 -- CONFIGURATION --------------------------------------------------------------
 --
@@ -44,10 +45,93 @@ local function mkpath( path )
 	--assert( lfs.mkdir( path ) )
 end
 
+-- Authentication verification through a dialog --------------------------------------------------------
+--
+function authenticate( ... )
+	for key, value in ipairs( { ... } ) do
+		if key == 2 then
+			userName = value
+		end
+		--print( "Key:", key, "Value:", value )
+	end
+
+	local dlg = wx.wxDialog(wx.NULL, wx.wxID_ANY, "Authenticate", wx.wxDefaultPosition, wx.wxSize( 278,150 ), wx.wxDEFAULT_DIALOG_STYLE)
+	dlg:SetIcon( Resources.GetAppIcon() )
+	local mainSizer = wx.wxBoxSizer( wx.wxVERTICAL )
+
+	local maySaveCheckBoxCtrl = wx.wxCheckBox( dlg, wx.wxID_ANY, "Save password", wx.wxDefaultPosition, wx.wxDefaultSize, 0 )
+	mainSizer:Add( maySaveCheckBoxCtrl, 0, wx.wxALL, 5 )
+
+	local userSizer = wx.wxBoxSizer( wx.wxHORIZONTAL )
+	local userLabel = wx.wxStaticText( dlg, wx.wxID_ANY, "User:", wx.wxDefaultPosition, wx.wxDefaultSize, 0 )
+	userLabel:Wrap( -1 )
+	userSizer:Add( userLabel, 0, wx.wxALL, 5 )
+	userSizer:Add( 0, 0, 1, wx.wxEXPAND, 5 )
+
+	local userNameTextCtrl = wx.wxTextCtrl( dlg, wx.wxID_ANY, userName, wx.wxDefaultPosition, wx.wxDefaultSize, 0 )
+	userNameTextCtrl:SetMinSize( wx.wxSize( 200,-1 ) )
+	userSizer:Add( userNameTextCtrl, 0, wx.wxALL, 5 )
+	mainSizer:Add( userSizer, 1, wx.wxEXPAND, 5 )
+
+	local pwSizer = wx.wxBoxSizer( wx.wxHORIZONTAL )
+	local pwLabel = wx.wxStaticText( dlg, wx.wxID_ANY, "Password:", wx.wxDefaultPosition, wx.wxDefaultSize, 0 )
+	pwLabel:Wrap( -1 )
+	pwSizer:Add( pwLabel, 0, wx.wxALL, 5 )
+	pwSizer:Add( 0, 0, 1, wx.wxEXPAND, 5 )
+
+	local passwordTextCtrl = wx.wxTextCtrl( dlg, wx.wxID_ANY, "", wx.wxDefaultPosition, wx.wxDefaultSize, wx.wxTE_PASSWORD )
+	passwordTextCtrl:SetMinSize( wx.wxSize( 200,-1 ) )
+	pwSizer:Add( passwordTextCtrl, 0, wx.wxALL, 5 )
+	mainSizer:Add( pwSizer, 1, wx.wxEXPAND, 5 )
+
+	local okSizer = wx.wxStdDialogButtonSizer()
+	local okButton = wx.wxButton( dlg, wx.wxID_OK, "OK" )
+	okSizer:AddButton( okButton )
+	local cancelButton = wx.wxButton( dlg, wx.wxID_CANCEL, "Cancel" )
+	okSizer:AddButton( cancelButton )
+	okSizer:Realize()
+	mainSizer:Add( okSizer, 1, wx.wxEXPAND, 5 )
+	dlg:SetSizer( mainSizer )
+
+	if dlg:ShowModal() == wx.wxID_OK then
+		password = passwordTextCtrl:GetValue()
+		maySave =  maySaveCheckBoxCtrl:GetValue()
+	else
+		password = ""
+		maySave = false
+	end
+
+	return password, maySave
+end
+
+function notify( ... )
+	--print( "Entering notify function" )
+	local keyString = { " path", " action", " kind", " mime_type", " content_state", " prop_state", " revision" }
+	local action = "Unknown Action:"
+	local path = "Unknown path"
+	for key, value in ipairs( { ... } ) do
+		--print( keyString[key], "Value:", value )
+		if key == 1 then path = value end
+		if key == 2 then
+			if     value == 0  then action = "Adding to revision control: "
+			elseif value == 9  then action = "Exporting: "
+			elseif value == 10 then action = "Updating: "
+			elseif value == 11 then action = "Completing update: "
+			elseif value == 12 then action = "Updating an external: "
+			elseif value == 15 then action = "Committing a modification: "
+			elseif value == 16 then action = "Committing an addition: "
+			elseif value == 19 then action = "Transmitting post-fix data: "
+			elseif value == 25 then action = "Adding an already-existing path: "
+			end
+		end
+	end
+	print( "", action, path )
+end
+
+local svnTim = SubLua.new( { listener = { Notify = notify, GetLogin = authenticate } } )
+
 -- VersionControlSystem CLASS --------------------------------------------------------
 --
-local svnTim = SubLua.new()
-
 vcs.VersionControlSystem =
 {
 	projectName		= nil,
@@ -147,7 +231,7 @@ function VersionControlSystem:Export( templatePath, localPath )
 	local status, externals = shell[Settings.sourceControlExecutable]( options )
 	]]
 
-	print( "--Getting externals:" )
+	print( "\n--Determining externals:" )
 	externals = svnTim:PropGet( "svn:externals", templatePath )
 
 	-- Write a tmp file containing the externals.
@@ -226,7 +310,7 @@ function VersionControlSystem:Update( localPath )
 	local options = { "update", "--non-interactive", localPath }
 	local status, logMsg = shell[Settings.sourceControlExecutable]( options )
 	]]
-	svnTim:Update( localPath )
+	svnTim:Update( localPath, { force=true } )
 
 	--return logMsg
 end
@@ -238,7 +322,7 @@ function VersionControlSystem:AddFiles( localPath )
 	for file in lfs.dir( localPath ) do
 		if file ~= "." and file ~= ".." and file ~= ".svn" and file ~= "svn-props.tmp" then
 			local f = localPath..'/'..file
-			print( "\t"..f )
+			--print( "\t"..f )
 			local attr = lfs.attributes( f )
 			assert( type( attr ) == "table" )
 			if attr.mode == "directory" then
@@ -275,14 +359,28 @@ function VersionControlSystem:SetProperty( property, localPath )
 		propValue = fHandle:read( "*all" )
 		fHandle:close()
 
-		print( "   Property:", property )
-		print( "   Property Value:", propValue )
-		print( "   Path:", localPath )
+		print( "", "Property:", property )
+		print( "", "Property Value:", propValue )
+		print( "", "Path:", localPath )
 		svnTim:PropSet( property, propValue, localPath, { recurse=false } )
 		os.remove( propFile )
 	end
 
 	return retVal
+end
+
+function VersionControlSystem:AddExternalLibrary( libString, localPath )
+	localPath = localPath or self:GetLocalPath()
+
+	local reader = io.input( localPath .. "/svn-props.tmp" )
+		propValue = reader:read( "*all" )
+	reader:close()
+
+	propValue = propValue .. libString .. "\n"
+
+	local writer = io.output( localPath .. "/svn-props.tmp" )
+		writer:write( propValue )
+	writer:close()
 end
 
 return _M
