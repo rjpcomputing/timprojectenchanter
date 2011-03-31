@@ -528,8 +528,12 @@ local function main()
 	TimGUI.projectTypeChoice = wx.wxChoice( TimGUI.panel, TimGUI.ID_PROJECT_TYPE_CHOICE, wx.wxDefaultPosition, wx.wxDefaultSize, templates, 0 )
 	TimGUI.projectTypeChoice:SetSelection( 0 )
 	projectControlSizer:Add( TimGUI.projectTypeChoice, 1, wx.wxALL, 5 )
+
+	--[[ un-comment this portion when ready to put some functionality into the preferences dialog
 	TimGUI.preferencesButton = wx.wxButton( TimGUI.panel, TimGUI.ID_PREFERENCES_BUTTON, "Preferences" )
 	projectControlSizer:Add( TimGUI.preferencesButton, 0, wx.wxALL, 5 )
+	--]]
+
 	-- Create Project
 	TimGUI.createProjectButton = wx.wxButton( TimGUI.panel, TimGUI.ID_CREATE_PROJECT_BUTTON, "Create Project" )
 	projectControlSizer:Add( TimGUI.createProjectButton, 0, wx.wxALL, 5 )
