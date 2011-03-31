@@ -105,14 +105,14 @@ function authenticate( ... )
 end
 
 function notify( ... )
-	--print( "Entering notify function" )
-	local keyString = { " path", " action", " kind", " mime_type", " content_state", " prop_state", " revision" }
+	--local keyString = { " path", " action", " kind", " mime_type", " content_state", " prop_state", " revision" }
 	local action = "Unknown Action:"
 	local path = "Unknown path"
 	for key, value in ipairs( { ... } ) do
 		--print( keyString[key], "Value:", value )
 		if key == 1 then path = value end
 		if key == 2 then
+			-- the values are from the svn_wc_notify_action_t enum
 			if     value == 0  then action = "Adding to revision control: "
 			elseif value == 9  then action = "Exporting: "
 			elseif value == 10 then action = "Updating: "
