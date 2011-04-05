@@ -27,6 +27,12 @@
 --	THE SOFTWARE.
 -- ----------------------------------------------------------------------------
 dofile( "Settings.lua" )
+
+
+-- Make sure this line is deleted/commented out before committing.  It's for diagnostic purposes.
+--package.cpath = package.cpath .. ";F:\\subCpp\\bin\\?.dll"
+
+
 require( "wx" )
 require( "lfs" )
 --require( "luapp" )
@@ -334,14 +340,13 @@ function TimGUI.OnPreferencesClicked( event )
 	end
 end
 
-function TimGUI.OnCreateProjectClicked( event )
-	-- Display the wait cursor to show work is being done.
-	wx.wxBeginBusyCursor()
+function ProtectedOnCreateProjectClicked( event )
 	wx.wxSafeYield()	-- Disable the controls to show that the project is being created.
 	wx.wxLogStatus( TimGUI.frame, "Project creation started. Please wait...")
 
 	-- Clear the log message
 	TimGUI.logTextCtrl:Clear()
+	TimGUI.logTextCtrl:Update()
 
 	local projName  = TimGUI.projectNameTextCtrl:GetValue()
 	if string.len( projName ) == 0 then
@@ -382,10 +387,9 @@ function TimGUI.OnCreateProjectClicked( event )
 	end
 
 	print( "\n-- Fill in the template" )
-	local err, message = pcall( TemplateReplace, { ProjectName = projName }, path .. "/" .. projName )
+	local errorFree, message = pcall( TemplateReplace, { ProjectName = projName }, path .. "/" .. projName )
 	wx.wxSafeYield()	-- Updates the GUI log
-    if not err then
-        wx.wxEndBusyCursor()
+    if not errorFree then
         wx.wxLogStatus( TimGUI.frame, "Project failed to complete...")
         local errMsg = "Error during preprocess phase. More info: " .. message
         print( errMsg )
@@ -412,10 +416,24 @@ function TimGUI.OnCreateProjectClicked( event )
 		print( "\n-- Update "..path.." to complete and get the latest changes" )
 		sc:Update()
 	end
+end
+
+function TimGUI.OnCreateProjectClicked( event )
+	-- Display the wait cursor to show work is being done.
+	wx.wxBeginBusyCursor()
+
+	local success, message = pcall( ProtectedOnCreateProjectClicked, event )
+	if not success then
+		wx.wxMessageBox( message, "Error", wx.wxICON_ERROR )
+		TimGUI.logTextCtrl:Clear()
+	end
 
 	wx.wxEndBusyCursor()
-    wx.wxMessageBox( "Project creation completed successfully...")
-	wx.wxLogStatus( TimGUI.frame, "Project creation complete..." )
+
+    if success then
+		wx.wxMessageBox( "Project creation completed successfully...")
+		wx.wxLogStatus( TimGUI.frame, "Project creation complete..." )
+	end
 end
 
 function TimGUI.OnSourceControlOpenClicked( event )
