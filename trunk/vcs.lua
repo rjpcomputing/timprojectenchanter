@@ -94,24 +94,27 @@ function authenticate( ... )
 	dlg:SetSizer( mainSizer )
 
 	if dlg:ShowModal() == wx.wxID_OK then
+		username = userNameTextCtrl:GetValue()
 		password = passwordTextCtrl:GetValue()
 		maySave =  maySaveCheckBoxCtrl:GetValue()
 	else
+		username = userNameTextCtrl:GetValue()
 		password = ""
 		maySave = false
 	end
 
-	return password, maySave
+	return username, password, maySave
 end
 
 function notify( ... )
 	--local keyString = { " path", " action", " kind", " mime_type", " content_state", " prop_state", " revision" }
-	local action = "Unknown Action:"
+	local action = "Unknown Action: "
 	local path = "Unknown path"
 	for key, value in ipairs( { ... } ) do
 		--print( keyString[key], "Value:", value )
 		if key == 1 then path = value end
 		if key == 2 then
+			action = action..value
 			-- the values are from the svn_wc_notify_action_t enum
 			if     value == 0  then action = "Adding to revision control: "
 			elseif value == 9  then action = "Exporting: "
@@ -122,6 +125,7 @@ function notify( ... )
 			elseif value == 16 then action = "Committing an addition: "
 			elseif value == 19 then action = "Transmitting post-fix data: "
 			elseif value == 25 then action = "Adding an already-existing path: "
+			elseif value == 40 then action = "Unable to operate on external: "
 			end
 		end
 	end
@@ -238,6 +242,10 @@ function VersionControlSystem:Export( templatePath, localPath )
 	local fHandle = io.output( localPath .. "/svn-props.tmp" )
 	for i, value in pairs( externals ) do
 		print( " ", i, value )
+		value, num = value:gsub( "https", "http" )
+		if num > 0 then
+			print( "", "Had to substitute 'http' for 'https'.  Ryan Mulder is a programming monkey.\n" )
+		end
 		fHandle:write( value )
 	end
 	fHandle:close()
@@ -254,6 +262,9 @@ function VersionControlSystem:MakeWorkingCopy( scPath, localPath, index )
 	scPath			= scPath or self:GetDestinationPath()
 	localPath		= localPath or self:GetLocalPath()
 	local logMsg	= ""
+
+	-- Avoid spaces in the repositorypath
+	scPath = string.gsub(scPath, " ", "_" )
 
 	-- Create repository location
 	local comment = "Created directories automatically."
@@ -287,9 +298,8 @@ function VersionControlSystem:MakeWorkingCopy( scPath, localPath, index )
 	return logMsg
 end
 
-function VersionControlSystem:Commit( localPath, scPath )
+function VersionControlSystem:Commit( localPath )
 	localPath	= localPath or self:GetLocalPath()
-	scPath		= scPath or self:GetDestinationPath()
 
 	-- Commit the changes to create the fresh project.
 	local comment = "Initial import created by Tim the Project Enchanter."
@@ -377,6 +387,10 @@ function VersionControlSystem:AddExternalLibrary( libString, localPath )
 	reader:close()
 
 	propValue = propValue .. libString .. "\n"
+	propValue, num = propValue:gsub( "https", "http" )
+	if num > 0 then
+		print( "", "Had to substitute 'http' for 'https'.  Ryan Mulder is a still programming monkey.\n" )
+	end
 
 	local writer = io.output( localPath .. "/svn-props.tmp" )
 		writer:write( propValue )
