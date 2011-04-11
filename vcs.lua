@@ -3,7 +3,7 @@ module( "vcs", package.seeall )
 -- MODULES --------------------------------------------------------------------
 --
 local lfs = require( "lfs" )
-require( "shell" )
+--require( "shell" )  -- not needed any more since migrating from shell to SubLua
 require( "SubLua" )
 require( "Resources" )
 
@@ -47,7 +47,7 @@ end
 
 -- Authentication verification through a dialog --------------------------------------------------------
 --
-function authenticate( ... )
+local function authenticate( ... )
 	for key, value in ipairs( { ... } ) do
 		if key == 2 then
 			userName = value
@@ -106,12 +106,11 @@ function authenticate( ... )
 	return username, password, maySave
 end
 
-function notify( ... )
+local function notify( ... )
 	--local keyString = { " path", " action", " kind", " mime_type", " content_state", " prop_state", " revision" }
-	local action = "Unknown Action: "
 	local path = "Unknown path"
+	local action = "Unknown Action: "
 	for key, value in ipairs( { ... } ) do
-		--print( keyString[key], "Value:", value )
 		if key == 1 then path = value end
 		if key == 2 then
 			action = action..value
