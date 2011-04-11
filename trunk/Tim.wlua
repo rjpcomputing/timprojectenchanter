@@ -35,7 +35,6 @@ dofile( "Settings.lua" )
 
 require( "wx" )
 require( "lfs" )
---require( "luapp" )
 require( "Resources" )
 require( "vcs" )
 local preprocess = require( "luapp" ).preprocess
@@ -81,9 +80,19 @@ local function TemplateReplace( keywords, path )
 	params.lookup.GeneratorSlogan = "Putting the big nasty teeth in project generation."
 	params.lookup.UserName = os.getenv( "USER" ) or os.getenv( "USERNAME" )
 	params.lookup.Date = os.date()
+	params.lookup.Links = "links\t{}"
+	params.lookup.IncludeDirs = "includedirs\t{}"
 
 	for keyword, value in pairs( keywords ) do
 		params.lookup[keyword] = value
+	end
+	if companyLib then
+		if companyLib.GetAdditionalLinks then
+			params.lookup.Links = companyLib.GetAdditionalLinks()
+		end
+		if companyLib.GetAdditionalIncludeDirs then
+			params.lookup.IncludeDirs = companyLib.GetAdditionalIncludeDirs()
+		end
 	end
 
 	-- Loop through files and rename each one
@@ -402,7 +411,7 @@ function ProtectedOnCreateProjectClicked( event )
 		wx.wxSafeYield()	-- Updates the GUI log
 
 		if companyLib and companyLib.AddCompanySpecificLibraries then
-			companyLib.AddCompanySpecificLibraries( TimGUI, sc )
+			companyLib.AddCompanySpecificLibraries( path .. "/" .. projName, sc )
 		end
 
 		print( "\n-- Set the externals" )
