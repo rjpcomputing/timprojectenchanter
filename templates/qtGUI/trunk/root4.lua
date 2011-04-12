@@ -23,6 +23,8 @@ MakeVersion( "$(ProjectName)Version.h" )
 
 -- PROJECT SETUP --------------------------------------------------------------
 --
+$(Logging)
+$(Boost)
 --boost.Configure( { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
 Configure()
 local mocFiles				= { "$(ProjectName)Frame.h" }

@@ -21,6 +21,8 @@ $(IncludeDirs)
 
 -- PROJECT SETUP --------------------------------------------------------------
 --
+$(Logging)
+$(Boost)
 --boost.Configure( { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
 wx.Configure()
 Configure()

@@ -19,8 +19,11 @@ $(IncludeDirs)
 
 -- PROJECT SETUP --------------------------------------------------------------
 --
+$(Logging)
+$(Boost)
 --boost.Configure( { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
 Configure()
+
 
 -- UNIT TESTING SETTING --------------------------------------------------------
 --
