@@ -11,6 +11,7 @@
 --
 dofile( "build/presets4.lua")
 --dofile( "build/boostpresets4.lua")
+dofile( "build/loggingpresets4.lua" )
 
 -- OPTIONS --------------------------------------------------------------------
 --
