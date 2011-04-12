@@ -319,7 +319,6 @@ function TimGUI.OnPreferencesClicked( event )
 	dlg:SetIcon( Resources.GetAppIcon() )
 	local mainSizer = wx.wxBoxSizer( wx.wxVERTICAL )
 
-
 	local okSizer = wx.wxStdDialogButtonSizer()
 	local okButton = wx.wxButton( dlg, wx.wxID_OK, "OK" )
 	okSizer:AddButton( okButton )
@@ -381,7 +380,7 @@ function ProtectedOnCreateProjectClicked( event )
 	end
 
 	print( "\n-- Fill in the template" )
-	local templateTable = { ProjectName = projName, Links = "links\t{}", IncludeDirs = "includedirs\t{}" }
+	local templateTable = { ProjectName = projName, Links = "links\t{}", IncludeDirs = "includedirs\t{}", Logging = "", Boost = "" }
 
 	if companyLib and companyLib.AddCompanySpecificLibraries then
 		templateTable = companyLib.AddCompanySpecificLibraries( path .. "/" .. projName, sc, templateTable )
