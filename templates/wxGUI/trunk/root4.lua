@@ -15,6 +15,10 @@ project	"$(ProjectName)"
 kind	"WindowedApp"
 files	{ "*.cpp", "*.h", "*.lua", "*.fbp" }
 
+$(Links)
+
+$(IncludeDirs)
+
 -- PROJECT SETUP --------------------------------------------------------------
 --
 --boost.Configure( { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )

@@ -15,6 +15,10 @@ project	"$(ProjectName)"
 kind	"WindowedApp"
 files	{ "*.cpp", "*.h", "*.lua" }
 
+$(Links)
+
+$(IncludeDirs)
+
 MakeVersion( "$(ProjectName)Version.h" )
 
 -- PROJECT SETUP --------------------------------------------------------------
