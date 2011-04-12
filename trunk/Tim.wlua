@@ -28,11 +28,6 @@
 -- ----------------------------------------------------------------------------
 dofile( "Settings.lua" )
 
-
--- Make sure this line is deleted/commented out before committing.  It's for diagnostic purposes.
---package.cpath = package.cpath .. ";F:\\subCpp\\bin\\?.dll"
-
-
 require( "wx" )
 require( "lfs" )
 require( "Resources" )
@@ -60,7 +55,7 @@ local function iff( cond, a, b )
 end
 
 -- Generate a unique new wxWindowID
-function NewID()
+local function NewID()
     ID_IDCOUNTER = ( ID_IDCOUNTER or wx.wxID_HIGHEST ) + 1
     return ID_IDCOUNTER
 end
@@ -80,19 +75,9 @@ local function TemplateReplace( keywords, path )
 	params.lookup.GeneratorSlogan = "Putting the big nasty teeth in project generation."
 	params.lookup.UserName = os.getenv( "USER" ) or os.getenv( "USERNAME" )
 	params.lookup.Date = os.date()
-	params.lookup.Links = "links\t{}"
-	params.lookup.IncludeDirs = "includedirs\t{}"
 
 	for keyword, value in pairs( keywords ) do
 		params.lookup[keyword] = value
-	end
-	if companyLib then
-		if companyLib.GetAdditionalLinks then
-			params.lookup.Links = companyLib.GetAdditionalLinks()
-		end
-		if companyLib.GetAdditionalIncludeDirs then
-			params.lookup.IncludeDirs = companyLib.GetAdditionalIncludeDirs()
-		end
 	end
 
 	-- Loop through files and rename each one
@@ -396,7 +381,13 @@ function ProtectedOnCreateProjectClicked( event )
 	end
 
 	print( "\n-- Fill in the template" )
-	local errorFree, message = pcall( TemplateReplace, { ProjectName = projName }, path .. "/" .. projName )
+	local templateTable = { ProjectName = projName, Links = "links\t{}", IncludeDirs = "includedirs\t{}" }
+
+	if companyLib and companyLib.AddCompanySpecificLibraries then
+		templateTable = companyLib.AddCompanySpecificLibraries( path .. "/" .. projName, sc, templateTable )
+	end
+
+	local errorFree, message = pcall( TemplateReplace, templateTable, path .. "/" .. projName )
 	wx.wxSafeYield()	-- Updates the GUI log
     if not errorFree then
         wx.wxLogStatus( TimGUI.frame, "Project failed to complete...")
@@ -409,10 +400,6 @@ function ProtectedOnCreateProjectClicked( event )
 		print( "\n-- Add files to revision control" )
 		sc:AddFiles()
 		wx.wxSafeYield()	-- Updates the GUI log
-
-		if companyLib and companyLib.AddCompanySpecificLibraries then
-			companyLib.AddCompanySpecificLibraries( path .. "/" .. projName, sc )
-		end
 
 		print( "\n-- Set the externals" )
 		sc:SetProperty( "svn:externals" )
@@ -625,8 +612,5 @@ local function main()
 	-- otherwise the wxLua program will exit immediately.
 	wx.wxGetApp():MainLoop()
 end
-
---Assign the company-specific file here
---dofile( "gentex.lua" )
 
 main()
