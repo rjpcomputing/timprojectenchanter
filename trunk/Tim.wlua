@@ -380,7 +380,7 @@ function ProtectedOnCreateProjectClicked( event )
 	end
 
 	print( "\n-- Fill in the template" )
-	local templateTable = { ProjectName = projName, Links = "links\t{}", IncludeDirs = "includedirs\t{}", Logging = "", Boost = "" }
+	local templateTable = { ProjectName = projName, Links = "links\t{}", IncludeDirs = "includedirs\t{}", Configurations = "Configure()" }
 
 	if companyLib and companyLib.AddCompanySpecificLibraries then
 		templateTable = companyLib.AddCompanySpecificLibraries( path .. "/" .. projName, sc, templateTable )
