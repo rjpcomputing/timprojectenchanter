@@ -6,12 +6,11 @@
 --
 --	Notes:
 -- ----------------------------------------------------------------------------
--- GENERAL SETUP -------------------------------------------------------------
+
+-- PROJECT SETUP -------------------------------------------------------------
 --
 project	"$(ProjectName)"
 
--- UNIT TESTING SETTING --------------------------------------------------------
---
 kind	"WindowedApp"
 files	{ "*.cpp", "*.h", "*.lua", "*.fbp" }
 
@@ -19,10 +18,7 @@ $(Links)
 
 $(IncludeDirs)
 
--- PROJECT SETUP --------------------------------------------------------------
+-- Configuration SETUP --------------------------------------------------------------
 --
-$(Logging)
-$(Boost)
---boost.Configure( { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
+$(Configurations)
 wx.Configure()
-Configure()

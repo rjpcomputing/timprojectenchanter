@@ -6,12 +6,11 @@
 --
 --	Notes:
 -- ----------------------------------------------------------------------------
--- GENERAL SETUP -------------------------------------------------------------
+
+-- PROJECT SETUP -------------------------------------------------------------
 --
 project	"$(ProjectName)"
 
--- UNIT TESTING SETTING --------------------------------------------------------
---
 kind	"WindowedApp"
 files	{ "*.cpp", "*.h", "*.lua" }
 
@@ -21,12 +20,9 @@ $(IncludeDirs)
 
 MakeVersion( "$(ProjectName)Version.h" )
 
--- PROJECT SETUP --------------------------------------------------------------
+-- Configuration SETUP --------------------------------------------------------------
 --
-$(Logging)
-$(Boost)
---boost.Configure( { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
-Configure()
+$(Configurations)
 local mocFiles				= { "$(ProjectName)Frame.h" }
 local qrcFiles				= { os.matchfiles( "*.qrc" ) }
 local uiFiles				= { os.matchfiles( "*.ui" ) }

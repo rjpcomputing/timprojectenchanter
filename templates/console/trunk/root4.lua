@@ -7,23 +7,17 @@
 --	Notes:
 -- ----------------------------------------------------------------------------
 
--- GENERAL SETUP -------------------------------------------------------------
+-- PROJECT SETUP -------------------------------------------------------------
 --
 project	"$(ProjectName)"
+
 kind	"ConsoleApp"
-files	{ "*.cpp", "*.h", "*.lua", "*.fbp" }
+files	{ "*.cpp", "*.h", "*.lua" }
 
 $(Links)
 
 $(IncludeDirs)
 
--- PROJECT SETUP --------------------------------------------------------------
+-- Configuration SETUP --------------------------------------------------------------
 --
-$(Logging)
-$(Boost)
---boost.Configure( { "system", "regex", "thread", "wserialization", "serialization", "filesystem" } )
-Configure()
-
-
--- UNIT TESTING SETTING --------------------------------------------------------
---
+$(Configurations)
