@@ -181,8 +181,8 @@ local output_mode = GENERATE_MODE
 local output_include = REMOTEGEN_HEADER_OUTPUT
 local output_src = REMOTEGEN_SOURCE_OUTPUT
 local output_schema = WSDL_OUTPUT --Determines where the WSDL file is placed
---local output_namespace = ""
-local output_copyright = "$Id: pocoprebuild.lua 12529 2010-12-21 21:52:08Z jlareau $" --SVN keyword property
+local output_namespace = ""
+local output_copyright = "$Id: pocoprebuild.lua 14302 2011-04-15 17:34:38Z lzhang $" --SVN keyword property
 --local output_includeRoot = ""
 --local output_flatIncludes = ""
 local output_library = LIBRARY_EXPORT
@@ -198,9 +198,8 @@ local compiler_options = ""
 --local compiler_path = ""
 
 if string.find( PREMAKE_TARGET or "", "vs*" ) then
-
 	compiler_type = "cl"
-	compiler_options = "/I "..'"'..POCO_PATH.."/Foundation/include"..'"'..",/I "..'"'..POCO_PATH.."/Remoting/include"..'"'..",/nologo,/C,/P,/TP"
+	compiler_options = "/I "..'"'..POCO_PATH.."/Foundation/include"..'"'..",/I "..'"'..POCO_PATH.."/Remoting/include"..'"'..",/I "..'"'..POCO_PATH.."/Util/include"..'"'..",/I "..'"'..POCO_PATH.."/OSP/include"..'"'..",/nologo,/C,/P,/TP"
 
 elseif PREMAKE_TARGET == "gnu" or string.find( PREMAKE_TARGET or "", ".*-gcc" ) then
 
@@ -230,7 +229,7 @@ output:append("mode")[1] = output_mode
 output:append("include")[1] = output_include
 output:append("src")[1] = output_src
 output:append("schema")[1] = output_schema
---output:append("namespace")[1] = output_namespace
+output:append("namespace")[1] = output_namespace
 output:append("copyright")[1] = output_copyright
 --output:append("includeRoot")[1] = output_includeRoot
 --output:append("flatIncludes")[1] = output_flatIncludes

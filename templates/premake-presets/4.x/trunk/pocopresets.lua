@@ -21,7 +21,7 @@ local POCO_LIB_PREFIX = "Poco"
 
 -- Determine the poco version from the installed path
 if windows then
-	poco.root = os.getenv( "POCO_BASE" )
+	poco.root = os.getenv( "appinf.libraries.foundation.poco" )
 	if not poco.root then
 		error( "missing the POCO_BASE environment variable" )
 	end
@@ -41,26 +41,121 @@ if windows then
 	poco.version = versionDir
 end
 
---  Create a poco deployment bundle.
+--  Extracts the compiler type from either the target name, dotname name, or c/c++ compiler (cc) name
+--  @returns The compiler type, i.e. "gcc" or "msvc2010"
+function GetCompilerType()
+
+	local compilerType
+
+	if target then
+		compilerType = target
+
+		if string.find( target or "", ".*-gcc" ) then
+			compilerType = "gcc"
+		elseif target == "gnu" then
+			compilerType = "gcc"
+		elseif TARGET == "gmake" then
+			compilerType = "gcc"
+		elseif target == "vs2005" then
+			compilerType = "vc8"
+		elseif target == "vs2008" then
+			compilerType = "vc9"
+		elseif target == "vs2010" then
+			compilerType = "vc10"
+		end
+	end
+
+	if dotnet then
+		if dotnet == "ms" then
+			compilerType = "csc"
+		elseif dotnet == "mono" then
+			compilerType = "mcs"
+		elseif dotnet == "mono2" then
+			compilerType = "gmcs"
+		elseif dotnet == "pnet" then
+			compilerType = "cscc"
+		end
+	end
+
+	if cc then
+		compilerType = cc
+	end
+
+	return compilerType
+end
+
+--  Creates a poco deployment bundle.
 --	@param pkg {table} Premake 'package' passed in that gets its settings manipulated.
 --  @param bundleSpec {string} [REQ] The path of the bundle specification file. Cannot be empty.
---  @param bundlePath {string} [DEF] The output of the bundle tool. Defaults to "./bundle".
+--  @param isDebug {bool} Defaults to false. The build configuration.
+--  @param includeBundleSpec {bool} Defaults to true. The bundleSpec will be added to the files table.
+--  @param bundlePath {string} [DEF] The output of the bundle tool. Defaults to "./bundles".
 --
-function poco.Bundle( pkg, bundleSpec, bundlePath )
+function poco.Bundle( pkg, bundleSpec, isDebug, includeBundleSpec, bundlePath )
 	if target then
+
+		if nil == isDebug then
+			isDebug = false
+		end
+
+		if nil == includeBundleSpec then
+			includeBundleSpec = true
+		end
+
 		assert( type( pkg ) == "table", "poco.Bundle: Param1:pkg type missmatch, should be a table." )
 		assert( bundleSpec ~= nil, "poco.Bundle: You myst specify the path of a bundle specification file!" )
+		assert( type( isDebug ) == "boolean", "poco.Bundle: Param3:isDebug type missmatch, should be a boolean." )
+		assert( type( includeBundleSpec ) == "boolean", "poco.Bundle: Param4:includeBundleSpec type missmatch, should be a boolean." )
 
 		if bundleSpec then
 
-			table.insert( pkg.files, bundleSpec )
+			if includeBundleSpec then
+				table.insert( pkg.files, bundleSpec )
+			end
 
 			local POCO_BUNDLE_OUTPUT = bundlePath or "\""..os.getcwd().."./bundles".."\""
 
 			if windows then
-				local bundleCommand = poco.root.."/bin/bundle.exe /output="..POCO_BUNDLE_OUTPUT.." "..bundleSpec
-				table.insert( pkg.postbuildcommands, bundleCommand )
+				local compilerType = GetCompilerType()
+				local bundleCommand = "\""..poco.root.."/bin/bundle.exe\" /output="..POCO_BUNDLE_OUTPUT.." "..bundleSpec.." ".."/define=compiler="..compilerType
+
+				if isDebug then
+					table.insert( pkg.config["Debug"].postbuildcommands, bundleCommand )
+				else
+					table.insert( pkg.config["Release"].postbuildcommands, bundleCommand )
+				end
 			end
+		end
+	end
+end
+
+--	Creates deployment packages. Runs "packager.lua" as a post build step.
+--	@param pkg {table} [REQ] Premake 'package' passed in that gets its settings manipulated.
+--	@param packagerPath {string} [DEF] The path of the lua packager script.  Defaults to "./build/packager.lua".
+--  @param bundlespecs {string} [DEF] The path to the bundle specification files. Defaults to "./bundlespecs".
+--  @param bundleOutput {string} [DEF] The output directory of the bundle tool. Will create a "bundles" dir here. Defaults to "./".
+--  @param compilerType {string} [DEF] The compiler used to create the binaries or shared libraries in the bundle. Will default to using the premake target name.
+--
+function poco.Deploy( pkg, packagerPath, bundlespecs, bundleOutput, compilerType )
+	if target then
+		assert( type( pkg ) == "table", "poco.Deploy: Param1:pkg type missmatch, should be a table." )
+
+		local PACKAGER_PATH = packagerPath or "./build/packager.lua"
+		local BUNDLE_SPEC_LOCATION = bundlespecs or "./bundlespecs"
+		local BUNDLE_OUTPUT = bundleOutput or "./"
+
+		-- Lua Name
+		local luaName = "lua "
+		if windows then
+			luaName = "lua.exe "
+		end
+
+		-- Compiler type
+		local COMPILER_TYPE = compilerType or GetCompilerType()
+
+		if windows then
+			local postBuildCommand = luaName .. PACKAGER_PATH .. ' -b ' .. BUNDLE_SPEC_LOCATION .. ' -p ' .. poco.root .. ' -o ' .. BUNDLE_OUTPUT .. ' -c ' .. COMPILER_TYPE
+			table.insert( pkg.postbuildcommands, { postBuildCommand } )
 		end
 	end
 end
@@ -69,13 +164,13 @@ end
 --  @param pkg {table} [REQ] Premake 'package' passed in that gets its settings manipulated.
 --  @param remoteFiles {string} [REQ] The header files that you want to generate remoting code for.
 --  @param mode {string} [DEF] Specifies the target the generator should generate code for: server, client, both, or interface. Defaults to interface.
---	@param serviceLocation {string} [DEF] The URI of the remote SOAP service. Should always have the form: http://<host>:<port>/soap/<serviceClass>/<objectId>
+--	@param SOAPServiceLocation {string} [DEF] The URI of the remote SOAP service. Should always have the form: http://<host>:<port>/soap/<serviceClass>/<objectId>
 --  @param OSPEnable {bool} [DEF] Specify whether code for Open Service Platform services should be generated.
 --  @param BundleActivator {bool} [DEF] If OSPEnable is true, specify if you want the bundle activator to be generated.
---  @param exportMacro {string} [DEF] If the package is a DLL, this is the name of the export macro to include in the generated files. Defaults to pkg.name.."_API". Note: Will always end with "_API", so don't include this suffix.
+--  @param exportMacro {string} [DEF] If the package is a DLL, this is the name of the export macro to include in the generated files. Defaults to empty. Note: Will automatically get appended with "_API", so don't include this suffix.
 --  @param pocoPrebuildPath {string} [DEF] The path to the "pocoprebuild.lua" file that is used to invoke the remoting code generator.
 --
-function poco.RemoteGen( pkg, remoteFiles, mode, serviceLocation, OSPEnable, BundleActivator, exportMacro, pocoPrebuildPath )
+function poco.RemoteGen( pkg, remoteFiles, mode, SOAPServiceLocation, OSPEnable, BundleActivator, exportMacro, pocoPrebuildPath )
 	if target then
 
 		local REMOTEGEN_HEADER_OUTPUT = "Generated Files/Header Files/"
@@ -165,16 +260,16 @@ function poco.RemoteGen( pkg, remoteFiles, mode, serviceLocation, OSPEnable, Bun
 
 			-- If the package is a DLL, we need to determine which export macro to use
 			if "dll" == pkg.kind then
-				exportMacro = exportMacro or pkg.name
+				exportMacro = exportMacro or ""
 			else
 				exportMacro = ""
 			end
 
 			-- Service location is used for SOAP RPC only
-			serviceLocation = serviceLocation or ""
+			SOAPServiceLocation = SOAPServiceLocation or ""
 
 			-- WSDL file for SOAP RPC
-			if "" ~= serviceLocation then
+			if "" ~= SOAPServiceLocation then
 				local WSDLFile = REMOTEGEN_WSDL_OUTPUT..remoteServiceName..".wsdl"
 				table.insert( pkg.files, { WSDLFile } )
 			end
@@ -191,7 +286,7 @@ function poco.RemoteGen( pkg, remoteFiles, mode, serviceLocation, OSPEnable, Bun
 
 			-- The prebuild command
 			pocoPrebuildPath = pocoPrebuildPath or "\""..os.getcwd().."/build/pocoprebuild.lua".."\""
-			local preBuildCommand = luaName .. pocoPrebuildPath .. ' "' .. mode .. '" "' .. remoteFile .. '" "' .. poco.root .. '" "' .. target ..'" "' .. remoteGenXML .. '" "' .. REMOTEGEN_HEADER_OUTPUT .. '" "' .. REMOTEGEN_SOURCE_OUTPUT .. '" "' .. serviceLocation .. '" "' .. REMOTEGEN_WSDL_OUTPUT .. '" "' .. exportMacro .. '" "' .. GenerateOSP .. '" "' .. GenerateBundleActivator
+			local preBuildCommand = luaName .. pocoPrebuildPath .. ' "' .. mode .. '" "' .. remoteFile .. '" "' .. poco.root .. '" "' .. target ..'" "' .. remoteGenXML .. '" "' .. REMOTEGEN_HEADER_OUTPUT .. '" "' .. REMOTEGEN_SOURCE_OUTPUT .. '" "' .. SOAPServiceLocation .. '" "' .. REMOTEGEN_WSDL_OUTPUT .. '" "' .. exportMacro .. '" "' .. GenerateOSP .. '" "' .. GenerateBundleActivator
 			table.insert( pkg.prebuildcommands, { preBuildCommand } )
 		end
 	end
@@ -294,6 +389,18 @@ function poco.Configure( pkg, pocoLibs, pocoVer )
 				if not iContainsEntry( libsToLink, "Util" ) then
 					table.insert( libsToLink, { "Util" } )
 					AddSystemPath( pkg, poco.root..'/'..'Util'..'/include' )
+				end
+
+				-- Make sure the "XML" library is linked against when using OSP
+				if not iContainsEntry( libsToLink, "XML" ) then
+					table.insert( libsToLink, { "XML" } )
+					AddSystemPath( pkg, poco.root..'/'..'XML'..'/include' )
+				end
+
+				-- Make sure the "Zip" library is linked against when using OSP
+				if not iContainsEntry( libsToLink, "Zip" ) then
+					table.insert( libsToLink, { "Zip" } )
+					AddSystemPath( pkg, poco.root..'/'..'Zip'..'/include' )
 				end
 
 			end

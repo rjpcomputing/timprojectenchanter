@@ -26,6 +26,11 @@ newoption {
 	description = "Allow use of qt kewords (incompatible with Boost)"
 }
 
+newoption {
+	trigger = "qt-adtf-support",
+	description = "Updated Qt paths to use version for ADTF support for Linux"
+}
+
 local QT_VC2005_LIB_DIR 	= "/lib"
 local QT_VC2008_LIB_DIR 	= "/lib"
 local QT_VC2010_LIB_DIR 	= "/lib"
@@ -185,12 +190,26 @@ function qt.Configure( mocfiles, qrcfiles, uifiles, libsToLink, qtMajorRev, qtPr
 			end
 
 			if shouldCopyLibs then
+
+				local destPath = '"' .. QtCopyPath .. '"'
+
 				-- Webkit has some extra dependencies
 				if table.contains( libsToLink, "Webkit" ) then
 					table.insert( libsToCopy, "XmlPatterns" )
+
+					--phonon doesn't build for MinGW
+					if not ActionUsesGCC() then
+
+						local phononSourcePath = '"' .. QT_ENV .. '\\bin\\' .. 'phonon4.dll' .. '"'
+						WindowsCopy( phononSourcePath, destPath )
+
+						if( _OPTIONS[ "qt-copy-debug" ] ) then
+							phononSourcePath = '"' .. QT_ENV .. '\\bin\\' .. 'phonond4.dll' .. '"'
+							WindowsCopy( phononSourcePath, destPath )
+						end
+					end
 				end
 
-				local destPath = '"' .. QtCopyPath .. '"'
 
 				for _, lib in ipairs( libsToCopy ) do
 					local libname =  QT_LIB_PREFIX .. lib .. qtMajorRev .. '.dll'
@@ -236,10 +255,23 @@ function qt.Configure( mocfiles, qrcfiles, uifiles, libsToLink, qtMajorRev, qtPr
 			configuration {} -- reset configuration
 
 		else
+			local pkgConfigPath = ""
+			if ( _OPTIONS["qt-adtf-support"] ) then
+				pkgConfigPath = "export PKG_CONFIG_PATH=/opt/adtf/qt/qt/lib/pkgconfig && "
+			end
+			
 			local qtLinks = QT_LIB_PREFIX .. table.concat( libsToLink, " " .. QT_LIB_PREFIX )
 			qtLinks = qtLinks .. " gobject-2.0 xrender fontconfig xext x11 gthread-2.0"
-			local qtLibs = "`pkg-config --libs " .. qtLinks .. "`"
-			local qtFlags = "`pkg-config --cflags " .. qtLinks .. "`"
+
+			local qtLibs = pkgConfigPath .. "pkg-config --libs " .. qtLinks
+			local qtFlags = pkgConfigPath .. "pkg-config --cflags " .. qtLinks
+			local libPipe = io.popen( qtLibs, 'r' )
+			local flagPipe= io.popen( qtFlags, 'r' )
+
+			qtLibs = libPipe:read( '*line' )
+			qtFlags = flagPipe:read( '*line' )
+			libPipe:close()
+			flagPipe:close()
 
 			buildoptions { qtFlags }
 			linkoptions { qtLibs }

@@ -30,7 +30,6 @@ if inputFileModTime == nil then
 	return
 end
 
-
 qtMocOutputDirectory		= "qt_moc"
 qtQRCOutputDirectory		= "qt_qrc"
 qtUIOutputDirectory			= "qt_ui"
@@ -95,7 +94,12 @@ if arg[1] == "-moc" then
 		return
 	end
 
-	if( 0 ~= os.execute( qtMocExe.." \""..arg[2].."\" -o \""..outputFileName.."\"" ) ) then
+	local fullMOCPath = qtMocExe.." \""..arg[2].."\" -o \""..outputFileName.."\""
+	if windows then
+		fullMOCPath = '""'..qtMocExe..'" "'..arg[2]..'" -o "'..outputFileName..'""'
+	end
+
+	if( 0 ~= os.execute( fullMOCPath ) ) then
 		print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[MOC Failed to generate ]]..outputFileName, 5 ) ); io.stdout:flush()
 	else
 		print( "MOC Created "..outputFileName ); io.stdout:flush()
@@ -110,7 +114,12 @@ elseif arg[1] == "-rcc" then
 		return
 	end
 
-	if( 0 ~= os.execute( qtQRCExe.." -name \""..GetFileNameNoExtFromPath( arg[2] ).."\" \""..arg[2].."\" -o \""..outputFileName.."\"" ) ) then
+	local fullRCCPath = qtQRCExe.." -name \""..GetFileNameNoExtFromPath( arg[2] ).."\" \""..arg[2].."\" -o \""..outputFileName.."\""
+	if windows then
+		fullRCCPath = '""'..qtQRCExe..'" -name "'..GetFileNameNoExtFromPath( arg[2] )..'" "'..arg[2]..'" -o "'..outputFileName..'""'
+	end
+
+	if( 0 ~= os.execute( fullRCCPath ) ) then
 		print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[RCC Failed to generate ]]..outputFileName, 6 ) ); io.stdout:flush()
 	else
 		print( "RCC Created "..outputFileName ); io.stdout:flush()
@@ -125,7 +134,12 @@ elseif arg[1] == "-uic" then
 		return
 	end
 
-	if( 0 ~= os.execute( qtUICExe.." \""..arg[2].."\" -o \""..outputFileName.."\"" ) ) then
+	local fullUICPath = qtUICExe.." \""..arg[2].."\" -o \""..outputFileName.."\""
+	if windows then
+		fullUICPath = '""'..qtUICExe..'" "'..arg[2]..'" -o "'..outputFileName..'""'
+	end
+
+	if( 0 ~= os.execute( fullUICPath ) ) then
 		print( BuildErrorWarningString( debug.getinfo(1).currentline, true, [[UIC Failed to generate ]]..outputFileName, 7 ) ); io.stdout:flush()
 	else
 		print( "UIC Created "..outputFileName ); io.stdout:flush()

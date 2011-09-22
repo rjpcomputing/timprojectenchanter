@@ -86,6 +86,20 @@ newoption
 	description	= "Enable information to be added for profiling by gcov"
 }
 
+newoption
+{
+	trigger		= "with-trace",
+	description	= "Enable trace statements"
+}
+
+if os.is("linux") then
+	newoption
+	{
+		trigger		= "rpath",
+		description	= "Linux only, set rpath on the linker line to find shared libraries next to executable"
+	}
+end
+
 presets = {}
 
 -- the version of the windows API for the _WIN32_WINNT macro, and others like it
@@ -214,6 +228,10 @@ function Configure()
 	if kindVal then
 		if "WindowedApp" == kindVal then
 			flags( "WinMain" )
+		elseif "StaticLib" == kindVal then
+			if not presets.GetCustomValue( "targetdir" ) then
+				targetdir( solution().basedir .. "/lib" )
+			end
 		end
 	else
 		kind( "ConsoleApp" )
@@ -223,8 +241,12 @@ function Configure()
 		objdir( "obj/" .. iif( _ACTION, _ACTION, "" ) )
 	end
 
-	configuration( "not no-extra-warnings" )
+	if (not _OPTIONS["no-extra-warnings"]) or (_OPTIONS["no-extra-warnings"] == "no") then
 		flags( "ExtraWarnings" )
+		if ActionUsesGCC() then
+			buildoptions( "-W" )
+		end
+	end
 
 	configuration( "not dynamic-runtime" )
 		flags( "StaticRuntime" )
@@ -248,7 +270,7 @@ function Configure()
 	-- COMPILER SPECIFIC SETUP ----------------------------------------------------
 	--
 	configuration( "gmake or codelite or codeblocks or xcode3" )
-		buildoptions( { "-W", "-Wno-unknown-pragmas", "-Wno-deprecated", "-fno-strict-aliasing" } )
+		buildoptions( { "-Wno-unknown-pragmas", "-Wno-deprecated", "-fno-strict-aliasing" } )
 		linkoptions( { "-Wl,-E" } )
 		if os.get() == "windows" then
 			linkoptions( { "-Wl,--enable-auto-import" } )
@@ -264,6 +286,25 @@ function Configure()
 			buildoptions( "-m32" )
 			linkoptions( "-m32" )
 		end
+
+	if os.is( "linux" ) then
+		local useRpath = true
+		local rpath="$$``ORIGIN"
+
+		local rpathOption = _OPTIONS[ "rpath" ]
+
+		if rpathOption then
+			if "no" == rpathOption or "" == rpathOption then
+				useRpath = false
+			else
+				rpath = rpathOption
+			end
+		end
+
+		if useRpath then
+			linkoptions( "-Wl,-rpath," .. rpath )
+		end
+	end
 
 	configuration( "vs*" )
 		flags( { "SEH", "No64BitChecks" } )
@@ -285,7 +326,7 @@ function Configure()
 		defines( { "_WIN32", "WIN32", "_WINDOWS", "NOMINMAX", "_WIN32_WINNT=" .. presets.WindowsAPIVersion } )
 
 	configuration( { "windows", "not StaticLib" } )
-		links( { "psapi", "ws2_32", "version" } )
+		links( { "psapi", "ws2_32", "version", "winmm" } )
 
 	configuration( { "linux", "not StaticLib" } )
 		links( { "pthread", "dl", "m" } )
@@ -294,16 +335,77 @@ function Configure()
 		-- lib is only needed because Premake automatically adds the -fPIC to dlls
 		buildoptions( "-fPIC" )
 
-	-- Add profiling information
-	configuration( "Debug gmake or codelite or codeblocks or xcode3", "with-gprof" )
-		buildoptions( "-pg" )
-		linkoptions( "-pg" )
+	if _OPTIONS["with-gprof"] then
+		-- Add profiling information
+		configuration( "Debug gmake or codelite or codeblocks or xcode3" )
+			buildoptions( "-pg" )
+			linkoptions( "-pg" )
+	end
 
-	configuration( "Debug gmake or codelite or codeblocks or xcode3", "with-gprof" )
-		buildoptions( { "-fprofile-arcs", "-ftest-coverage" } )
-		links( "gcov" )
+	if _OPTIONS["with-gcov"] then
+		-- Add coverage information
+		configuration( "Debug gmake or codelite or codeblocks or xcode3" )
+			buildoptions( { "-fprofile-arcs", "-ftest-coverage" } )
+			links( "gcov" )
+	end
 
 	configuration(cfg.terms)
+
+end
+
+--[[	Configure a C/C++ project to use a library.
+--  @param libName			{string} Name of the library
+--  @param includePath		{string} [DEF] Path to include directory
+--  @param sharedOptionName	{string} [DEF] Name of option controlling dynamic linkage
+--  @param usingDllDefine	{string} [DEF] Define for using the library as a dll.
+--	Appended to project setup:
+--		includedirs	(	"../" .. includePath or libName	)
+--		links		(	libName							)
+--		if _OPTIONS[ sharedOptionName or ( string.lower( libName ) .. "-shared" ) ] then
+--			defines( usingDllDefine or ( string.upper( libName ) .. "_USING_DLL" ) )
+--		end
+--
+--	Example:
+--		ConfigureLibrary( "boost_utils" )
+--]]
+
+function ConfigureLibrary( libName, includePath, sharedOptionName, usingDllDefine )
+
+	if not libName then
+		error( "ConfigureLibrary needs the name of the library", 2 )
+	end
+
+	if type( libName ) ~= "string" then
+		error( "ConfigureLibrary expects the name of the library as a string", 2 )
+	end
+
+	local kindVal = presets.GetCustomValue( "kind" ) or ""
+	if ( kindVal ~= "StaticLib" ) then
+		links( libName )
+	end
+
+	if includePath then
+		local success, msg = pcall( includedirs, includePath )
+		if not success then
+			error( "ConfigureLibrary( " .. libName .. " ): " .. msg, 2 )
+		end
+	else
+		if unittest and unittest.projectUnderTestKind then
+			kindVal = unittest.projectUnderTestKind
+		end
+
+		presets.Trace( "Configuring " .. libName .. " for " .. project().name .. ", when " .. project().name .. " is a " .. kindVal )
+
+		if ( (kindVal == "StaticLib") or (kindVal == "SharedLib") ) then
+			includedirs( "../" .. libName )
+		else
+			includedirs( libName )
+		end
+	end
+
+	if _OPTIONS[ sharedOptionName or ( string.lower( libName ) .. "-shared" ) ] then
+		defines( usingDllDefine or ( string.upper( libName ) .. "_USING_DLL" ) )
+	end
 
 end
 
@@ -458,33 +560,37 @@ function ActionUsesMSVC()
 	return (_ACTION and _ACTION:find("vs"))
 end
 
-function WindowsCopy( sourcePath, destinationDirectory )
-	if os.is("windows") then
-		sourceFile = string.gsub( sourcePath, "([\\]+)", "/" )
-		local unquotedSource = string.gsub( sourceFile, '"', '' )
+function presets.CopyFile( sourcePath, destinationDirectory )
+	sourceFile = string.gsub( sourcePath, "([\\]+)", "/" )
+	local unquotedSource = string.gsub( sourceFile, '"', '' )
 
-		destinationDirectory = string.gsub( destinationDirectory, "([\\]+)", "/" )
-		local unquotedDestination = string.gsub( destinationDirectory, '"', '' )
+	destinationDirectory = string.gsub( destinationDirectory, "([\\]+)", "/" )
+	local unquotedDestination = string.gsub( destinationDirectory, '"', '' )
 
-		if not os.isdir( unquotedDestination ) then
-			print( "Creating Directory: " .. unquotedDestination ); io.stdout:flush()
-			local created, msg = os.mkdir( unquotedDestination )
-			if( not created ) then
-				error( "WindowsCopy Failed: " .. msg, 2 )
-			end
+	if not os.isdir( unquotedDestination ) then
+		print( "Creating Directory: " .. unquotedDestination ); io.stdout:flush()
+		local created, msg = os.mkdir( unquotedDestination )
+		if( not created ) then
+			error( "presets.CopyFile Failed: " .. msg, 2 )
 		end
+	end
 
-		local sourceFileName = path.getname( unquotedSource )
-		if sourceFileName ~= path.getname( unquotedDestination ) then
-			unquotedDestination = unquotedDestination .. "/" .. sourceFileName
-		end
+	local sourceFileName = path.getname( unquotedSource )
+	if sourceFileName ~= path.getname( unquotedDestination ) then
+		unquotedDestination = unquotedDestination .. "/" .. sourceFileName
+	end
 
-		print( "os.copyfile( " .. unquotedSource .. ", " .. unquotedDestination .. " )" ); io.stdout:flush()
+	print( "os.copyfile( " .. unquotedSource .. ", " .. unquotedDestination .. " )" ); io.stdout:flush()
 
-		local copied, msg = os.copyfile( unquotedSource, unquotedDestination )
-		if not copied then
-			error( "WindowsCopy Failed: " .. msg, 2 )
-		end
+	local copied, msg = os.copyfile( unquotedSource, unquotedDestination )
+	if not copied then
+		error( "presets.CopyFile Failed: " .. msg, 2 )
+	end
+end
+
+function WindowsCopy( ... )
+	if os.is( "windows" ) then
+		presets.CopyFile( ... )
 	end
 end
 
@@ -532,5 +638,54 @@ function CopyCRT( destinationDirectory, copyDebugCRT )
 			sourcePath = "C:/MinGW4/bin/libgcc_s_dw2-1.dll"
 			WindowsCopy( sourcePath, destinationDirectory )
 		end
+	end
+end
+
+---
+-- Convert a file to a c header file for includsion as an array
+-- @param sourceFile	The name of the file to convert
+-- @param destFile		[DEF] The name of the destination file, defaults to path.getname( sourceFile ) .. ".h"
+-- @param destFile		[DEF] The name of the variable, defaults to path.getname( sourceFile )
+-- Adapted from
+-- http://lua-users.org/wiki/BinToCee
+-- Original author: Mark Edgar
+-- Licensed under the same terms as Lua (MIT license).
+--
+function presets.Bin2C( sourceFile, destFile, variableName )
+
+	local content = assert( io.open( sourceFile,"rb" ) ):read"*all"
+
+	local dump do
+		local numberTable={}
+		for i = 0, 255 do
+			numberTable[ string.char( i ) ] = ("0x%02X,"):format( i )
+		end
+		function dump( str )
+			return ( str:gsub( ".", numberTable ):gsub( ("."):rep(75), "%0\n\t" ) )
+		end
+	end
+
+	local filename = path.getname( sourceFile )
+	variableName = variableName or string.lower( string.gsub( filename, "%.", "_" ) )
+	destFile = destFile or filename .. ".h"
+	local headerGuard = string.upper( string.gsub( path.getname( destFile ), "%.", "_" ) )
+	local output = assert( io.open( destFile, "w" ) )
+	output:write (
+	"/* code automatically generated by bin2c -- DO NOT EDIT */\n",
+	"#ifndef ", headerGuard, "\n",
+	"#define ", headerGuard, "\n\n",
+	"static const unsigned char ", variableName, "[] = \n",
+	"{\n\t",
+	dump(content), "\n",
+	"};\n\n",
+	"#endif //", headerGuard, "\n" )
+end
+
+---
+-- call print if 'with-trace' is on
+--
+function presets.Trace( ... )
+	if _OPTIONS["with-trace"] then
+		print( ... ); io.stdout:flush()
 	end
 end

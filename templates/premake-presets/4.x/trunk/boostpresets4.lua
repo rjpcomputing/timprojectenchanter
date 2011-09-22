@@ -281,7 +281,7 @@ function boost.Configure( libsToLink, gccVer, boostVer )
 end
 
 function boost.CopyDynamicLibraries( libsToLink, destinationDirectory, gccVer, boostVer, copyDebug )
-	if _ACTION then
+	if _ACTION and ( _ACTION ~= "clean") then
 		boostVer = boostVer or boost.version
 		local shouldCopyDebugLibs = copyDebug
 		if copyDebug == nil then
@@ -293,7 +293,7 @@ function boost.CopyDynamicLibraries( libsToLink, destinationDirectory, gccVer, b
 		end
 
 		local libprefix = ""
-		if boost.numeric_version >= 1.45 then
+		if boost.numeric_version >= 1.45 and ActionUsesGCC() then
 			libprefix = "lib"
 		end
 

@@ -20,6 +20,12 @@ newoption
 	description = "Unit test performed for Team City"
 }
 
+newoption
+{
+	trigger = "maxtesttime",
+	description = "Maximum number of ms allowed for an individual unit test"
+}
+
 local disableAllTests = "disable-all-tests"
 newoption
 {
@@ -39,6 +45,8 @@ unittest =
 	googleMockPath	= "googlemock/googlemock4.lua",
 	googleTestPath	= "googlemock/gtest/googletest4.lua",
 	mockLibFound	= nil,
+	projectUnderTest = nil,					-- The project under test
+	projectUnderTestKind = nil,				-- The kind of the project under test
 
 	oldDofile = dofile,			-- Holds the function pointer to the original 'dofile()'.
 }
@@ -130,7 +138,7 @@ end
 
 ---	Call this To configure your package to be .
 --	@param pkg Premake 'package' passed in that gets all the settings manipulated.
-function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock )
+function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock, withLog4CPlus )
 	inputFiles = inputFiles or {}
 	assert( type( inputFiles ) == "table", "unittest.Configure( Param2:inputFiles ) type missmatch, should be a table." )
 	inputExcludes = inputExcludes or {}
@@ -138,7 +146,9 @@ function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock )
 
 	--mock = mock or false
 
-	local pkgName = project().name
+	unittest.projectUnderTest = project()
+	unittest.projectUnderTestKind = presets.GetCustomValue( "kind" )
+	local pkgName = unittest.projectUnderTest.name
 	local testName = pkgName .. "-tests"
 
 	-- Add the options help.
@@ -153,7 +163,7 @@ function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock )
 	newoption
 	{
 		trigger = onlyTest,
-		description = "Only create the test project for " ..pkgName
+		description = "Only create the test project for " .. pkgName
 	}
 
 	-- Add the package to the project if being tested.
@@ -172,6 +182,9 @@ function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock )
 		end
 
 		project( testName )
+
+		-- configure just like the original
+		setupFunction()
 
 		-- Set all the new package details.
 		kind( "ConsoleApp" )
@@ -195,6 +208,16 @@ function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock )
 		if _OPTIONS["teamcity"] then
 			teamCitySuffix = " --teamCityOutput"
 		end
+
+		local maxTestTimeSuffix = ""
+		if _OPTIONS["maxtesttime"] then
+			maxTestTimeSuffix = " --time=" .. _OPTIONS["maxtesttime"]
+		end
+
+		if withLog4CPlus then
+			defines "UNITTEST_WITH_LOG4CPLUS"
+		end
+
 		-- Do unit test packages so it does not have to be called elsewhere
 		DoUnitTestSetup( inputFiles, inputExcludes )
 
@@ -207,20 +230,20 @@ function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock )
 
 		configuration "Debug"
 			targetsuffix("")
+			targetdir( projectTargetDir )
 			targetname( pkgName .. "d-tests" )
-			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix }
+			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix}
 
 		configuration "Release"
 			targetname( pkgName .. "-tests" )
-			local pbCmd = '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix
-			print( "\nPostBuild command: " .. pbCmd )
-			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix }
+			targetdir( projectTargetDir )
+			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix }
 
 		configuration( {} )
-
-		-- configure just like the original
-		setupFunction()
 	end
+
+	unittest.projectUnderTest = nil
+	unittest.projectUnderTestKind = nil
 end
 
 -- ENTRY POINT ---------------------------------------------------------

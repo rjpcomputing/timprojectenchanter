@@ -207,6 +207,12 @@ function boost.Configure( pkg, libsToLink, gccVer, boostVer )
 		table.insert( pkg.defines, { "WIN32_LEAN_AND_MEAN" } )
 	end
 
+    -- use this extra lib folder in case your system is a little different.
+	boost.extra_lib_folder = os.getenv( "BOOST_LIB_DIR" )
+	if boost.extra_lib_folder then
+       	table.insert( pkg.libpaths, { boost.extra_lib_folder } )
+	end
+
 	if options["boost-shared"] then
 		pkg.defines	= pkg.defines or {}
 		table.insert( pkg.defines, "BOOST_ALL_DYN_LINK"	)

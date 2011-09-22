@@ -30,9 +30,9 @@
 --        Find it on \\znas2\electrical\User\Tester\rpusztai\Code\IDEs\Visual Studio\VS9
 -- ----------------------------------------------------------------------------
 require( "lfs" )
-require( "pl.lapp" )
-require( "pl.path" )
-require( "pl.dir" )
+local lapp = require( "pl.lapp" )
+local path = require( "pl.path" )
+local dir = require( "pl.dir" )
 
 -- HELPER FUNCTIONS -----------------------------------------------------------
 --
@@ -159,7 +159,7 @@ end
 ---	Removes all files in the current working directory using the supplied pattern.
 --	@param pattern The file pattern to remove.
 local function RemoveAll( pattern )
-	local files = pl.dir.getfiles( ".", pattern )
+	local files = dir.getfiles( ".", pattern )
 	for _, file in ipairs( files )do
 		print( "Cleaning old file:", file )
 		os.remove( file )
@@ -171,10 +171,10 @@ end
 ---	Launch Premake to generate the project files.
 local function GenerateProjectFiles( tget, options, args, shouldUsePremake4 )
 	if type( tget ) ~= "string" then
-		error( "bad argument #1 to GenerateProjectFiles. (Expected string but recieved "..type( tget )..")" )
+		error( "bad argument #1 to GenerateProjectFiles. (Expected string but received "..type( tget )..")" )
 	end
 	if type( args ) ~= "string" then
-		error( "bad argument #2 to GenerateProjectFiles. (Expected string but recieved "..type( args )..")" )
+		error( "bad argument #2 to GenerateProjectFiles. (Expected string but received "..type( args )..")" )
 	end
 
 	local premakeRet = -1
@@ -193,8 +193,8 @@ local function GenerateProjectFiles( tget, options, args, shouldUsePremake4 )
 	end
 
 	if premakeRet ~= 0 then
-		print( string.format( "Premake error (%i) occured.", premakeRet ) )
-		os.exit( premakeRet )
+		print( string.format( "Premake error (%i) occured. Converted exit code to 1", premakeRet ) )
+		os.exit( 1 )
 	end
 	print( "" )
 end
@@ -202,7 +202,7 @@ end
 local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles )
 	-- Check parameters
 	if type( cfg ) ~= "string" then
-		error( "bad argument #1 to ExecuteGnuBuilder. (Expected string but recieved "..type( cfg )..")" )
+		error( "bad argument #1 to ExecuteGnuBuilder. (Expected string but received "..type( cfg )..")" )
 	end
 	shouldClean = shouldClean or false
 
@@ -253,7 +253,7 @@ end
 local function ExecuteVs2005Builder( cfg, shouldClean )
 	-- Check parameters
 	if type( cfg ) ~= "string" then
-		error( "bad argument #1 to ExecuteVs2005Builder. (Expected string but recieved "..type( cfg )..")" )
+		error( "bad argument #1 to ExecuteVs2005Builder. (Expected string but received "..type( cfg )..")" )
 	end
 	shouldClean = shouldClean or false
 
@@ -304,7 +304,7 @@ end
 local function ExecuteVs2008Builder( cfg, shouldClean )
 	-- Check parameters
 	if type( cfg ) ~= "string" then
-		error( "bad argument #1 to ExecuteVs2008Builder. (Expected string but recieved "..type( cfg )..")" )
+		error( "bad argument #1 to ExecuteVs2008Builder. (Expected string but received "..type( cfg )..")" )
 	end
 	shouldClean = shouldClean or false
 
@@ -354,7 +354,7 @@ end
 local function ExecuteVs2010Builder( cfg, shouldClean )
 	-- Check parameters
 	if type( cfg ) ~= "string" then
-		error( "bad argument #1 to ExecuteVs2010Builder. (Expected string but recieved "..type( cfg )..")" )
+		error( "bad argument #1 to ExecuteVs2010Builder. (Expected string but received "..type( cfg )..")" )
 	end
 	shouldClean = shouldClean or false
 
@@ -408,11 +408,16 @@ local function ExecuteINNOBuilder( file )
 	local curDir = lfs.currentdir()
 
 	if type( file ) ~= "string" then
-		error( "bad argument #1 to ExecuteINNOBuilder. (Expected string but recieved "..type( file )..")" )
+		error( "bad argument #1 to ExecuteINNOBuilder. (Expected string but received "..type( file )..")" )
+	end
+
+	-- Make sure the setup file exists before continueing
+	if not FileExists( file ) then
+		error( ("INNO Setup file (%q) does not exist."):format( file ) )
 	end
 
 	-- Change the directory to the installer file directory.
-	lfs.chdir( pl.path.dirname( file ) )
+	lfs.chdir( path.dirname( file ) )
 
 	-- Launch INNO Setup command line compiler to build the installer.
 	local installerCmd = ""
@@ -421,7 +426,7 @@ local function ExecuteINNOBuilder( file )
 		RemoveAll( "*.exe" )
 		RemoveAll( "output/*.exe" )
 		local innoPath = os.getenv( "PROGRAMFILES" ) .. [[\Inno Setup 5\ISCC.exe]]
-		installerCmd = string.format( [[""%s" %q"]], innoPath, pl.path.basename( file ) )
+		installerCmd = string.format( [[""%s" %q"]], innoPath, path.basename( file ) )
 		print( installerCmd ); io.stdout:flush()
 
 		local installerRet = os.execute( installerCmd )
@@ -449,11 +454,16 @@ local function ExecuteNSISBuilder( file )
 	local curDir = lfs.currentdir()
 
 	if type( file ) ~= "string" then
-		error( "bad argument #1 to ExecuteNSISBuilder. (Expected string but recieved "..type( file )..")" )
+		error( "bad argument #1 to ExecuteNSISBuilder. (Expected string but received "..type( file )..")" )
+	end
+
+	-- Make sure the setup file exists before continueing
+	if not FileExists( file ) then
+		error( ("NSIS Installer file (%q) does not exist."):format( file ) )
 	end
 
 	-- Change the directory to the installer file directory.
-	lfs.chdir( pl.path.dirname( file ) )
+	lfs.chdir( path.dirname( file ) )
 
 	-- Launch NSIS command line compiler to build the installer.
 	local installerCmd = ""
@@ -477,6 +487,35 @@ local function ExecuteNSISBuilder( file )
 	lfs.chdir( curDir )
 end
 
+local function ExecuteGPack( cmdLine )
+	print( "ExecuteGPack invoked." ); io.stdout:flush()
+
+	-- Create default cmd line args for packager.lua if the caller didn't specify them
+	if nil == cmdLine then
+		if nil == TARGET then
+			error( "TARGET is not expected to be nil during ExecuteGPack " )
+		end
+
+		-- Poco is expected to be installed in order for packager to run the bundle.exe tool
+		local pocoBase = os.getenv( "POCO_BASE" )
+
+		-- Default location of bundle spec files, bundle output dir is the current dir
+		cmdLine = "-b ./bundlespecs -p "..pocoBase.." -o ./ -c "..TARGET
+	else
+		if type( cmdLine ) ~= "string" then
+			error( "bad argument #1 to ExecuteGPack. (Expected string but received "..type( file )..")" )
+		end
+	end
+
+	-- Build the packager.lua command line
+	cmdLine = "lua.exe ./build/packager.lua "..cmdLine
+
+	-- Invoke packager.lua which will create bundles and deploy them to the bundle repository
+	print( cmdLine ); io.stdout:flush()
+	local cmdRet = os.execute( cmdLine )
+	print( "Packager exited with code "..( cmdRet or "<nil>" ) )
+end
+
 Targets =
 {
   gnu = ExecuteGnuBuilder,
@@ -489,11 +528,12 @@ Targets =
 Installers =
 {
   inno = ExecuteINNOBuilder,
-  nsis = ExecuteNSISBuilder
+  nsis = ExecuteNSISBuilder,
+  gpack = ExecuteGPack,
 }
 
 function main()
-	local args = pl.lapp [[
+	local args = lapp [[
 	Builds the current project. Run from the root level.
 
 	-t,--target         (string)            One of the following: vs2005, vs2008, gnu, or gmake.
@@ -541,21 +581,33 @@ function main()
 		end
 	end
 
+	if "gpack" == installer then
+		-- Force the mscvrt fix
+		premakeOptions = "--reshack-msvcrt-manifest "..premakeOptions
+
+		-- Generate premake scripts for managing dependencies
+		if args.premake4 then
+			ExecuteGPack( "-g premake4 -b ./bundlespecs -o ./build -c "..args.target )
+		else
+			ExecuteGPack( "-g premake3 -b ./bundlespecs -o ./build -c "..args.target )
+		end
+	end
+
 	-- Generate the project files
-	local target = args.target or "none"
-	if target ~= "none" then
-		if not ContainsKey( Targets, target ) then
-			error( "Invalid target: " .. target )
+	TARGET = args.target or "none"
+	if TARGET ~= "none" then
+		if not ContainsKey( Targets, TARGET ) then
+			error( "Invalid target: " .. TARGET )
 		end
 
-		if ( "gnu" == target ) and args.premake4 then
-			target = "gmake"
+		if ( "gnu" == TARGET ) and args.premake4 then
+			TARGET = "gmake"
 		end
 
-		GenerateProjectFiles( target, premakeOptions, premakeArgs, args.premake4 )
+		GenerateProjectFiles( TARGET, premakeOptions, premakeArgs, args.premake4 )
 
 		-- Actually build project
-		Targets[ target ]( build, shouldClean )
+		Targets[ TARGET ]( build, shouldClean )
 	end
 
 	-- Optionally build the installer

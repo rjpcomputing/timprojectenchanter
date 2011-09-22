@@ -146,9 +146,14 @@ function unittest.Configure( pkg, files, excludes, mock )
 		if options["teamcity"] then
 			teamCitySuffix = " --teamCityOutput"
 		end
+		
+		local maxTestTimeSuffix = ""
+		if options["maxtesttime"] then
+			maxTestTimeSuffix = " --time=" .. options["maxtesttime"]
+		end
 
-		table.insert( newPkg.config["Debug"].postbuildcommands, { newPkg.bindir .. pathSeparator .. newPkg.config["Debug"].target .. teamCitySuffix } )
-		table.insert( newPkg.config["Release"].postbuildcommands, { newPkg.bindir .. pathSeparator .. newPkg.config["Release"].target .. teamCitySuffix } )
+		table.insert( newPkg.config["Debug"].postbuildcommands, { newPkg.bindir .. pathSeparator .. newPkg.config["Debug"].target .. teamCitySuffix .. maxTestTimeSuffix } )
+		table.insert( newPkg.config["Release"].postbuildcommands, { newPkg.bindir .. pathSeparator .. newPkg.config["Release"].target .. teamCitySuffix .. maxTestTimeSuffix } )
 
 		-- Do unit test packages so it does not have to be called elsewhere
 		DoUnitTestSetup( newPkg, files, excludes )

@@ -195,24 +195,24 @@ function wx.Configure( shouldSetTarget, wxVer, copyDlls )
 		if _OPTIONS["unicode"] then
 			releaseWxRuntimeName = releaseWxRuntimeName .. "u"
 			debugWxRuntimeName = debugWxRuntimeName .. "ud"
-			configuration { "Debug" }
+			configuration { "Debug", "not StaticLib" }
 				links { debugWxRuntimeName, "wxexpatd", "wxjpegd", "wxpngd", "wxregexud", "wxtiffd", "wxzlibd" }
 				for _, lib in ipairs( winLibs) do
 					links { lib }
 				end
-			configuration { "Release" }
+			configuration { "Release", "not StaticLib" }
 				links { releaseWxRuntimeName, "wxexpat", "wxjpeg", "wxpng", "wxregexu", "wxtiff", "wxzlib" }
 				for _, lib in ipairs( winLibs) do
 					links { lib }
 				end
 		else
 			debugWxRuntimeName = debugWxRuntimeName .. "d"
-			configuration { "Debug" }
+			configuration { "Debug", "not StaticLib" }
 				links { debugWxRuntimeName, "wxexpatd", "wxjpegd", "wxpngd", "wxregexd",	"wxtiffd", "wxzlibd" }
 				for _, lib in ipairs( winLibs) do
 					links { lib }
 				end
-			configuration { "Release" }
+			configuration { "Release", "not StaticLib" }
 				links { releaseWxRuntimeName, "wxexpat", "wxjpeg", "wxpng", "wxregex",	"wxtiff", "wxzlib" }
 				for _, lib in ipairs( winLibs) do
 					links { lib }
@@ -384,7 +384,7 @@ function wx.ConfigureAdditions( libsToLink, wxVer )
 			WindowsCopy( winWxRuntimePath .. libname .. dllSuffix, SolutionTargetDir() )
 		end
 	end
-	configuration { "Debug" }
+	configuration { "Debug", "not StaticLib" }
 		for _, lib in ipairs( libs ) do
 			links { lib }
 		end
@@ -396,7 +396,7 @@ function wx.ConfigureAdditions( libsToLink, wxVer )
 			WindowsCopy( winWxRuntimePath .. libname .. dllSuffix, SolutionTargetDir() )
 		end
 	end
-	configuration { "Release" }
+	configuration { "Release", "not StaticLib" }
 		for _, lib in ipairs( libs ) do
 			links { lib }
 		end

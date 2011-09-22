@@ -36,6 +36,7 @@ addoption( "dynamic-runtime", "Use the dynamically loadable version of the runti
 addoption( "unicode", "Use the Unicode character set." )
 addoption( "force-32bit", "Forces GCC to build as a 32bit only" )
 addoption( "release-with-debug-symbols", "Adds Debug symbols to the release build." )
+addoption( "reshack-msvcrt-manifest", "Modify the embedded manifest to depend on version 0.0.0.0 of the msvc runtime" )
 
 if windows then
 	addoption( "disable-mingw-mthreads", "Disables the MinGW specific -mthreads compile option." )
@@ -247,6 +248,86 @@ function Configure( pkg )
 			table.insert( pkg.config["Release"].buildoptions, { "/Zi" } )
 			table.insert( pkg.config["Release"].linkoptions, { "/DEBUG" } )
 		end
+
+		-- Use the reshacker utility to change the embedded msvcrt manifest
+		if options["reshack-msvcrt-manifest"] and options[ "dynamic-runtime" ] and pkg.kind ~= "lib" then
+
+			-- The reshack install path should be defined in an environment variable
+			local resHackInstallPath = os.getenv( "gtm.utilities.reshacker" )
+			if not resHackInstallPath then
+				error( "missing the gtm.utilities.reshacker environment variable!" )
+			end
+
+			-- Determine the type of file we are modifying, either an executable or a dll
+			local fileExtension = pkg.kind
+			if string.find( fileExtension or "", "winexe" ) then
+				fileExtension = "exe"
+			end
+
+			-- Build an absolute path to the main premake project
+			local premakedir = string.gsub( os.getcwd(), pkg.path, "" )
+			local projectbindir = pkg.bindir or project.bindir
+			local absolutePath = premakedir.."/"..projectbindir
+
+			-- fix slashes
+			absolutePath = string.gsub( absolutePath, "([/]+)", "\\" )
+			absolutePath = string.gsub( absolutePath, "([\\\\]+)", "\\" )
+
+			-- Build the output file path of the binary
+			local targetName = absolutePath.."\\"..pkg.name.."."..fileExtension
+			local targetNameDebug = absolutePath.."\\"..pkg.name.."d."..fileExtension
+
+			-- This file contains the manifest data we are going to replace in the binary
+			local embeddedManifest = premakedir.."\\build\\".."msvcrt.manifest"
+			local embeddedManifestDebug = premakedir.."\\build\\".."msvcrtd.manifest"
+
+			-- Release
+			local resHackCommand1 = " -delete "..targetName..","..targetName..",24,1,"
+			local resHackCommand2 = " -delete "..targetName..","..targetName..",24,2,"
+			local resHackCommand3 = " -add "..targetName..","..targetName..","..embeddedManifest..",24,1,"
+
+			--Reshack seems to choke when the argument length exceeds this many characters
+			local MAX_RESHACK_FILE_PATH = 255
+			if #resHackCommand1 > MAX_RESHACK_FILE_PATH then
+				print( "resHack Command1 Size="..#resHackCommand1.." Command1="..resHackCommand1 )
+				error( "Reshack commands cannot have more than "..MAX_RESHACK_FILE_PATH.." characters! Try shortening the name of your binary." )
+			end
+			if #resHackCommand2 > MAX_RESHACK_FILE_PATH then
+				print( "resHack Command2 Size="..#resHackCommand2.." Command2="..resHackCommand2 )
+				error( "Reshack commands cannot have more than "..MAX_RESHACK_FILE_PATH.." characters! Try shortening the name of your binary." )
+			end
+			if #resHackCommand3 > MAX_RESHACK_FILE_PATH then
+				print( "resHack Command3 Size="..#resHackCommand3.." Command3="..resHackCommand2 )
+				error( "Reshack commands cannot have more than "..MAX_RESHACK_FILE_PATH.." characters! Try shortening the name of your binary." )
+			end
+
+			table.insert( pkg.config["Release"].postbuildcommands, "\""..resHackInstallPath.."\""..resHackCommand1 )
+			table.insert( pkg.config["Release"].postbuildcommands, "\""..resHackInstallPath.."\""..resHackCommand2 )
+			table.insert( pkg.config["Release"].postbuildcommands, "\""..resHackInstallPath.."\""..resHackCommand3 )
+
+			-- Debug
+			resHackCommand1 = " -delete "..targetNameDebug..","..targetNameDebug..",24,1,"
+			resHackCommand2 = " -delete "..targetNameDebug..","..targetNameDebug..",24,2,"
+			resHackCommand3 = " -add "..targetNameDebug..","..targetNameDebug..","..embeddedManifestDebug..",24,1,"
+
+			--Reshack seems to choke when the argument length exceeds this many characters
+			if #resHackCommand1 > MAX_RESHACK_FILE_PATH then
+				print( "resHack debug Command1 Size="..#resHackCommand1.." Command1="..resHackCommand1 )
+				error( "Reshack commands cannot have more than "..MAX_RESHACK_FILE_PATH.." characters! Try shortening the name of your binary." )
+			end
+			if #resHackCommand2 > MAX_RESHACK_FILE_PATH then
+				print( "resHack debug Command2 Size="..#resHackCommand2.." Command2="..resHackCommand2 )
+				error( "Reshack commands cannot have more than "..MAX_RESHACK_FILE_PATH.." characters! Try shortening the name of your binary." )
+			end
+			if #resHackCommand3 > MAX_RESHACK_FILE_PATH then
+				print( "resHack debug Command3 Size="..#resHackCommand3.." Command3="..resHackCommand3 )
+				error( "Reshack commands cannot have more than "..MAX_RESHACK_FILE_PATH.." characters! Try shortening the name of your binary." )
+			end
+
+			table.insert( pkg.config["Debug"].postbuildcommands, "\""..resHackInstallPath.."\""..resHackCommand1 )
+			table.insert( pkg.config["Debug"].postbuildcommands, "\""..resHackInstallPath.."\""..resHackCommand2 )
+			table.insert( pkg.config["Debug"].postbuildcommands, "\""..resHackInstallPath.."\""..resHackCommand3 )
+		end
 	end
 
 	if target == "vs2003" then
@@ -275,7 +356,7 @@ function Configure( pkg )
 		-- Maybe add "*.manifest" later, but it seems to get in the way.
 		table.insert( pkg.files, { matchfiles( "*.rc" ) } )
 		table.insert( pkg.defines, { "_WIN32", "WIN32", "_WINDOWS", "NOMINMAX" } )
-		local winLibs 							= { "psapi", "ws2_32", "version" }
+		local winLibs 							= { "psapi", "ws2_32", "version", "winmm" }
 		table.insert( pkg.config["Release"].links, winLibs )
 		table.insert( pkg.config["Debug"].links, winLibs )
 	elseif linux then													-- LINUX
@@ -443,7 +524,7 @@ function MakeVersion( pkg, nameOfFile, workingDirectory )
 	-- Check if the file is already added to the package's file table.
 	if not iContainsEntry( pkg.files, nameOfFile ) then
 		-- Only add it because it isn't already there.
-		io.popen( cmd )
+		os.execute( cmd )
 		table.insert( pkg.files, nameOfFile )
 	end
 	-- add template file to project so the template can be easily updated
@@ -614,4 +695,129 @@ function GetFileNameNoExtFromPath( path )
 	end
 
 	return returnFilename
+end
+
+function ConfigureDependency( pkg, installRoot, includePaths, links, libPaths, defines, buildFlags, buildOptions, linkOptions, isDebug )
+
+	assert( pkg ~= nil, "ConfigureDependency: Param1:pkg is nil" )
+	assert( installRoot ~= nil, "ConfigureDependency: Param2:installRoot is nil" )
+
+	includePaths = includePaths or {}
+	links = links or {}
+	libPaths = libPaths or {}
+	defines = defines or {}
+	buildFlags = buildFlags or {}
+	buildOptions = buildOptions or {}
+	linkOptions = linkOptions or {}
+	isDebug = isDebug or false
+
+	assert( type( pkg ) == "table", "ConfigureDependency Param1:pkg type mismatch, should be a table." )
+	assert( type( installRoot ) == "string", "ConfigureDependency Param2:installRoot type mismatch, should be a string." )
+	assert( type( includePaths ) == "table", "ConfigureDependency Param3:includePaths type mismatch, should be a table." )
+	assert( type( links ) == "table", "ConfigureDependency Param4:links type mismatch, should be a table." )
+	assert( type( libPaths ) == "table", "ConfigureDependency Param5:libPaths type mismatch, should be a table." )
+	assert( type( defines ) == "table", "ConfigureDependency Param6:defines type mismatch, should be a table." )
+	assert( type( buildFlags ) == "table", "ConfigureDependency Param7:buildFlags type mismatch, should be a table." )
+	assert( type( buildOptions ) == "table", "ConfigureDependency Param8:buildOptions type mismatch, should be a table." )
+	assert( type( linkOptions ) == "table", "ConfigureDependency Param9:linkOptions type mismatch, should be a table." )
+	assert( type( isDebug ) == "boolean", "ConfigureDependency Param10:isDebug type mismatch, should be a bool." )
+
+	pkg.includepaths					= pkg.includepaths or {}
+	pkg.config["Release"].includepaths	= pkg.config["Release"].includepaths or {}
+	pkg.config["Debug"].includepaths	= pkg.config["Debug"].includepaths or {}
+
+	pkg.links							= pkg.links or {}
+	pkg.config["Release"].links			= pkg.config["Release"].links or {}
+	pkg.config["Debug"].links			= pkg.config["Debug"].links or {}
+
+	pkg.libpaths						= pkg.libpaths or {}
+
+	pkg.defines							= pkg.defines or {}
+	pkg.config["Debug"].defines			= pkg.config["Debug"].defines or {}
+	pkg.config["Release"].defines		= pkg.config["Release"].defines or {}
+
+	pkg.buildflags						= pkg.buildflags or {}
+	pkg.config["Debug"].buildflags		= pkg.config["Debug"].buildflags or {}
+	pkg.config["Release"].buildflags	= pkg.config["Release"].buildflags or {}
+
+	pkg.buildoptions					= pkg.buildoptions or {}
+
+	pkg.linkoptions						= pkg.linkoptions or {}
+
+	-- Include paths
+	for _,includePath in pairs( includePaths ) do
+		if string.find( target or "", ".*-gcc" ) then
+			if isDebug then
+				table.insert( pkg.config["Debug"].buildoptions, { "-isystem " .. installRoot..'/'..includePath } )
+				pkg.config["Debug"].includepaths[installRoot..'/'..includePath] = nil -- remove from includes to make system path work properly
+			else
+				table.insert( pkg.config["Release"].buildoptions, { "-isystem " .. installRoot..'/'..includePath } )
+				pkg.config["Release"].includepaths[installRoot..'/'..includePath] = nil -- remove from includes to make system path work properly
+			end
+		elseif target == "gnu" then
+			if isDebug then
+				table.insert( pkg.config["Debug"].buildoptions, { "-isystem \"" .. installRoot..'/'..includePath .. "\"" } )
+				pkg.config["Debug"].includepaths[installRoot..'/'..includePath] = nil -- remove from includes to make system path work properly
+			else
+				table.insert( pkg.config["Release"].buildoptions, { "-isystem \"" .. installRoot..'/'..includePath .. "\"" } )
+				pkg.config["Release"].includepaths[installRoot..'/'..includePath] = nil -- remove from includes to make system path work properly
+			end
+		else
+			if isDebug then
+				table.insert( pkg.config["Debug"].includepaths, installRoot..'/'..includePath )
+			else
+				table.insert( pkg.config["Release"].includepaths, installRoot..'/'..includePath )
+			end
+		end
+	end
+
+	-- Links
+	for _,linkLib in pairs( links ) do
+		if isDebug then
+			table.insert( pkg.config["Debug"].links, linkLib )
+		else
+			table.insert( pkg.config["Release"].links, linkLib )
+		end
+	end
+
+	-- Lib Paths
+	for _,libPath in pairs( libPaths ) do
+		if not iContainsEntry( pkg.libpaths, installRoot..'/'..libPath ) then
+			table.insert( pkg.libpaths, installRoot..'/'..libPath )
+		end
+	end
+
+	-- Defines
+	for _,define in pairs( defines ) do
+		if isDebug then
+			table.insert( pkg.config["Debug"].defines, define )
+		else
+			table.insert( pkg.config["Release"].defines, define )
+		end
+	end
+
+	-- buildFlags
+	for _,buildFlag in pairs( buildFlags ) do
+		if isDebug then
+			table.insert( pkg.config["Debug"].buildflags, buildFlag )
+		else
+			table.insert( pkg.config["Release"].buildflags, buildFlag )
+		end
+	end
+
+	-- buildOptions
+	for _,buildOption in pairs( buildOptions ) do
+
+		if not iContainsEntry( pkg.buildoptions, buildOption ) then
+			table.insert( pkg.buildoptions, buildOption )
+		end
+	end
+
+	-- linkOptions
+	for _,linkOption in pairs( linkOptions ) do
+
+		if not iContainsEntry( pkg.linkoptions, linkOption ) then
+			table.insert( pkg.linkoptions, linkOption )
+		end
+	end
 end

@@ -7,7 +7,7 @@
 -- ----------------------------------------------------------------------------
 
 -- Namespace
-qt = {}
+qt = qt or {}
 qt.version = "4" -- default Qt version
 
 -- Package Options
@@ -29,6 +29,64 @@ local QT_UI_FILES_PATH		= "qt_ui"
 local QT_QRC_FILES_PATH		= "qt_qrc"
 
 local QT_LIB_PREFIX			= "Qt"
+
+function qt.preprocessor( pkg, mocfiles, qrcfiles, uifiles, qtPrebuildPath )
+	if target then
+
+		local QT_PREBUILD_LUA_PATH	= qtPrebuildPath or "\""..os.getcwd().."/build/qtprebuild.lua".."\""
+
+		local QT_ENV = os.getenv( "nokia.libraries.core.qt" )
+
+		mocfiles = mocfiles or {}
+		qrcfiles = qrcfiles or {}
+		uifiles = uifiles or {}
+
+		Flatten( mocfiles )
+		Flatten( qrcfiles )
+		Flatten( uifiles )
+
+		-- Check Parameters
+		assert( type( pkg ) == "table", "Param1:pkg type mismatch, should be a table." )
+		assert( type( mocfiles ) == "table", "mocfiles type mismatch, should be a table." )
+		assert( type( qrcfiles ) == "table", "qrcfiles type mismatch, should be a table." )
+		assert( type( uifiles ) == "table", "uifiles type mismatch, should be a table." )
+
+		-- Add generated file dirs to the include paths
+		table.insert( pkg.includepaths, { "./"..QT_MOC_FILES_PATH, "./"..QT_UI_FILES_PATH, "./"..QT_QRC_FILES_PATH } )
+
+		os.mkdir( QT_MOC_FILES_PATH )
+		os.mkdir( QT_QRC_FILES_PATH )
+		os.mkdir( QT_UI_FILES_PATH )
+
+		local LUAEXE = "lua "
+
+		if windows then
+			LUAEXE = "lua.exe "
+		end
+
+		-- Set up Qt pre-build steps and add the generated file paths to the pkg
+		for _,file in ipairs( mocfiles ) do
+			local mocFile = GetFileNameNoExtFromPath( file )
+			local mocFilePath = QT_MOC_FILES_PATH.."/moc_"..mocFile..".cpp"
+			table.insert( pkg.prebuildcommands, { LUAEXE .. QT_PREBUILD_LUA_PATH .. ' -moc "' .. file .. '" "' .. QT_ENV .. '"' } )
+			table.insert( pkg.files, { mocFilePath } )
+		end
+
+		for _,file in ipairs( qrcfiles ) do
+			local qrcFile = GetFileNameNoExtFromPath( file )
+			local qrcFilePath = QT_QRC_FILES_PATH.."/qrc_"..qrcFile..".cpp"
+			table.insert( pkg.prebuildcommands, { LUAEXE .. QT_PREBUILD_LUA_PATH .. ' -rcc "' .. file .. '" "' .. QT_ENV .. '"' } )
+			table.insert( pkg.files, { file, qrcFilePath } )
+		end
+
+		for _,file in ipairs( uifiles ) do
+			local uiFile = GetFileNameNoExtFromPath( file )
+			local uiFilePath = QT_UI_FILES_PATH.."/ui_"..uiFile..".h"
+			table.insert( pkg.prebuildcommands, { LUAEXE .. QT_PREBUILD_LUA_PATH .. ' -uic "' .. file .. '" "' .. QT_ENV .. '"' } )
+			table.insert( pkg.files, { file, uiFilePath } )
+		end
+	end
+end
 
 function qt.Configure( pkg, mocfiles, qrcfiles, uifiles, libsToLink, qtMajorRev, qtPrebuildPath, copyDynamicLibraries )
 
