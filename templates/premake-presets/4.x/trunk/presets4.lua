@@ -160,7 +160,7 @@ end
 --		package.links						= (Windows) { "psapi", "ws2_32", "version" }
 --											  (Linux) { "pthread", "dl", "m" }
 --	Set and can not be changed:
---		pkg.objdir							= (VC) "obj[u]" (GCC) ".obj[u]
+--		pkg.objdir							= ".obj[u]"
 --
 --	Console Example:
 --		dofile( "build/presets.lua" )
@@ -238,7 +238,7 @@ function Configure()
 	end
 
 	if not presets.GetCustomValue( "objdir" ) then
-		objdir( "obj/" .. iif( _ACTION, _ACTION, "" ) )
+		objdir( ".obj/" .. iif( _ACTION, _ACTION, "" ) )
 	end
 
 	if (not _OPTIONS["no-extra-warnings"]) or (_OPTIONS["no-extra-warnings"] == "no") then
@@ -265,7 +265,7 @@ function Configure()
 	configuration( "unicode" )
 		flags( "Unicode" )
 		defines( { "UNICODE", "_UNICODE" } )
-		objdir( "obju/" .. iif( _ACTION, _ACTION, "" ) )
+		objdir( ".obju/" .. iif( _ACTION, _ACTION, "" ) )
 
 	-- COMPILER SPECIFIC SETUP ----------------------------------------------------
 	--
