@@ -323,7 +323,7 @@ function Configure()
 	configuration( "windows" )
 		-- Maybe add "*.manifest" later, but it seems to get in the way.
 		files( "*.rc" )
-		defines( { "_WIN32", "WIN32", "_WINDOWS", "NOMINMAX", "_WIN32_WINNT=" .. presets.WindowsAPIVersion } )
+		defines( { "_WIN32", "WIN32", "_WINDOWS", "NOMINMAX", "_WIN32_WINNT=" .. presets.WindowsAPIVersion, "WINVER=" .. presets.WindowsAPIVersion } )
 
 	configuration( { "windows", "not StaticLib" } )
 		links( { "psapi", "ws2_32", "version", "winmm" } )
@@ -336,17 +336,25 @@ function Configure()
 		buildoptions( "-fPIC" )
 
 	if _OPTIONS["with-gprof"] then
+		if ActionUsesGCC() then
 		-- Add profiling information
-		configuration( "Debug gmake or codelite or codeblocks or xcode3" )
+			configuration( "Debug" )
 			buildoptions( "-pg" )
 			linkoptions( "-pg" )
+		else
+			error( "gprof can only be used with gcc" )
+		end
 	end
 
 	if _OPTIONS["with-gcov"] then
+		if ActionUsesGCC() then
 		-- Add coverage information
-		configuration( "Debug gmake or codelite or codeblocks or xcode3" )
+			configuration( "Debug" )
 			buildoptions( { "-fprofile-arcs", "-ftest-coverage" } )
 			links( "gcov" )
+		else
+			error( "gcov can only be used with gcc" )
+		end
 	end
 
 	configuration(cfg.terms)
@@ -578,6 +586,10 @@ function presets.CopyFile( sourcePath, destinationDirectory )
 	local sourceFileName = path.getname( unquotedSource )
 	if sourceFileName ~= path.getname( unquotedDestination ) then
 		unquotedDestination = unquotedDestination .. "/" .. sourceFileName
+	end
+
+	if not os.isfile( unquotedSource ) then
+		print( "Could not find file: " .. unquotedSource )
 	end
 
 	print( "os.copyfile( " .. unquotedSource .. ", " .. unquotedDestination .. " )" ); io.stdout:flush()
