@@ -166,6 +166,9 @@ function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock, wit
 		description = "Only create the test project for " .. pkgName
 	}
 
+	-- Create the return variable
+	local createdTestProject = false
+
 	-- Add the package to the project if being tested.
 	if ( not _OPTIONS[disableTest] ) and ( not _OPTIONS[disableAllTests] ) then
 
@@ -226,24 +229,41 @@ function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock, wit
 			DoMockTestSetup()
 		end
 
-		projectTargetDir = SolutionTargetDir() or "bin"
-
-		configuration "Debug"
+		configuration( { "Debug", "x32 or native" } )
+			local projectTargetDir = SolutionTargetDir( false ) or solution().basedir .. "/bin"
 			targetsuffix("")
 			targetdir( projectTargetDir )
 			targetname( pkgName .. "d-tests" )
 			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix}
 
-		configuration "Release"
+		configuration( { "Release", "x32 or native" } )
+			local projectTargetDir = SolutionTargetDir( false ) or solution().basedir .. "/bin"
 			targetname( pkgName .. "-tests" )
 			targetdir( projectTargetDir )
 			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix }
 
+		configuration( { "Debug", "x64" } )
+			local projectTargetDir = SolutionTargetDir( false ) or solution().basedir .. "/bin64"
+			targetsuffix("")
+			targetdir( projectTargetDir )
+			targetname( pkgName .. "d64-tests" )
+			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix}
+
+		configuration( { "Release", "x64" } )
+			local projectTargetDir = SolutionTargetDir( false ) or solution().basedir .. "/bin64"
+			targetname( pkgName .. "64-tests" )
+			targetdir( projectTargetDir )
+			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix }
+
 		configuration( {} )
+
+		createdTestProject = true
 	end
 
 	unittest.projectUnderTest = nil
 	unittest.projectUnderTestKind = nil
+
+	return createdTestProject
 end
 
 -- ENTRY POINT ---------------------------------------------------------

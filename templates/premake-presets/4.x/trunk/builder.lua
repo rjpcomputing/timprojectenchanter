@@ -232,12 +232,7 @@ local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles )
 	end
 
 	-- Launch make to build
-	local makeCmd = ""
-	if IsWindows() then
-		makeCmd = string.format( "%s %s=%s", make, configLabel, cfg )
-	else
-		makeCmd = string.format( "%s %s=%s", make, configLabel, cfg )
-	end
+	local makeCmd = string.format( "%s %s=%s", make, configLabel, cfg )
 	print( makeCmd ); io.stdout:flush()
 	local makeRet = os.execute( makeCmd )
 	if makeRet ~= 0 then
@@ -402,7 +397,7 @@ local function ExecuteVs2010Builder( cfg, shouldClean )
 end
 
 
-local function ExecuteINNOBuilder( file )
+local function ExecuteINNOBuilder( file, shouldClean )
 	print( "INNO Setup Installer Builder invoked." ); io.stdout:flush()
 	-- Get the current working directory so we can restore it after the work is done.
 	local curDir = lfs.currentdir()
@@ -411,7 +406,7 @@ local function ExecuteINNOBuilder( file )
 		error( "bad argument #1 to ExecuteINNOBuilder. (Expected string but received "..type( file )..")" )
 	end
 
-	-- Make sure the setup file exists before continueing
+	-- Make sure the setup file exists before continuing
 	if not FileExists( file ) then
 		error( ("INNO Setup file (%q) does not exist."):format( file ) )
 	end
@@ -422,9 +417,11 @@ local function ExecuteINNOBuilder( file )
 	-- Launch INNO Setup command line compiler to build the installer.
 	local installerCmd = ""
 	if IsWindows() then
-		-- Clean all old installer files.
-		RemoveAll( "*.exe" )
-		RemoveAll( "output/*.exe" )
+		if shouldClean then
+			-- Clean all old installer files.
+			RemoveAll( "*.exe" )
+			RemoveAll( "output/*.exe" )
+		end
 		local innoPath = os.getenv( "PROGRAMFILES" ) .. [[\Inno Setup 5\ISCC.exe]]
 		installerCmd = string.format( [[""%s" %q"]], innoPath, path.basename( file ) )
 		print( installerCmd ); io.stdout:flush()
@@ -440,8 +437,10 @@ local function ExecuteINNOBuilder( file )
 		end
 	else
 		print( "Only Windows is supported right now." )
-		-- Clean all old installer files.
-		RemoveAll( "*.deb" )
+		if shouldClean then
+			-- Clean all old installer files.
+			RemoveAll( "*.deb" )
+		end
 	end
 
 	lfs.chdir( curDir )
@@ -612,7 +611,7 @@ function main()
 
 	-- Optionally build the installer
 	if installer then
-		Installers[ installer ]( installerFile )
+		Installers[ installer ]( installerFile, shouldClean )
 	end
 end
 

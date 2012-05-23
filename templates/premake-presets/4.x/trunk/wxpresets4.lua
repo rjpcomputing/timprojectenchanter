@@ -17,11 +17,73 @@ newoption
 -- Namespace
 wx = {}
 
+function VerifyWxDlls( envPath, relPathToDLL, strName ) 
+--check for the right version of VS libs
+	-- the libs don't have any truly identifying info, but the dlls do.
+	-- call dumpbin -headers on that dll, and parse out linker version
+	if _ACTION == "vs2005" or _ACTION == "vs2008" or _ACTION == "vs2010" then
+		local dllPath = envPath .. relPathToDLL
+		local dumpBinPath = "../../VC/bin/dumpbin.exe"
+		local vscomntools = ""
+		local expectedVersion = "0"
+		if _ACTION == "vs2005" then
+			vscomntools = os.getenv( "VS80COMNTOOLS" )
+			expectedVersion = "8.00"
+		elseif _ACTION == "vs2008" then
+			vscomntools = os.getenv( "VS90COMNTOOLS" )
+			expectedVersion = "8.00"	--yes, 8.0  2005 libs work with 2008.
+		elseif _ACTION == "vs2010" then
+			vscomntools = os.getenv( "VS100COMNTOOLS" )
+			expectedVersion = "10.00"
+		end
+		
+		if vscomntools then
+			--this commandline has to execute dumpbin -headers inside an environment setup by vwvars32.bat.
+			--the generated path should look something like:
+			--cmd.exe /C ""C:\Program Files (x86)\Microsoft Visual Studio 9.0\Common7\Tools\vsvars32.bat" && "C:\Program Files (x86)\Microsoft Visual Studio 9.0\Common7\Tools\../../VC/bin/dumpbin.exe" -headers E:\SourceCode\Libraries\wxWidgets2.8.11.03/lib/vc_dll/wxbase28_net_vc.dll"
+
+			local cmdline = "cmd.exe /C \"\"" .. vscomntools .. "vsvars32.bat\" && \""  .. vscomntools .. dumpBinPath .. "\"" .. " -headers " .. dllPath  .. "\""
+			--print (cmdline)
+			local file = assert( io.popen( cmdline ))
+			local output = file:read( '*all' )
+			--print( output )
+			file:close()
+			local strStart, strEnd, match = string.find( output, "(%d+.%d+)%slinker version" )
+			if match == nil then
+				print ("error getting linker version from VS tools:  Cannot verify " .. strName .. " libs" )
+			end
+			--print( strStart )
+			--print( strEnd )
+			--print( match )
+			--print ( string.sub( output, strStart, strEnd ) )
+				
+			if match ~= expectedVersion then
+				error( strName .. " directory does not appear to contain libraries compatible with " .. _ACTION .. ".  " .. "\n linker version: " .. match .. "\n $" .. strName .. ":" .. envPath  )
+			end
+		else
+			print ("unable to find VS tools.  Cannot verify " .. strName .. " libs" )
+		end
+	end
+end
+
+
+
 if "windows" == os.get() then
 	wx.root = os.getenv( "WXWIN" )
 	if not wx.root then
 		error( "missing the WXWIN environment variable" )
 	end
+	
+	--check for headers existing.
+	local f =io.open( wx.root .. "/include/wx/wx.h" )
+	if f==nil then
+		error( "can't find include/wx/wx.h! - check the value of WXWIN (" .. wx.root .. ")" )
+	end
+	
+	
+	VerifyWxDlls( wx.root, "/lib/vc_dll/wxbase28_net_vc.dll", "WXWIN" )
+	
+	
 end
 
 ---	Configure a C/C++ package to use wxWidgets
@@ -353,6 +415,17 @@ function wx.ConfigureAdditions( libsToLink, wxVer )
 	end
 	-- Check to make sure that the package is valid.
 	assert( type( libsToLink ) == "table", "Param1:libsToLink type missmatch, should be a table." )
+	
+	if "windows" == os.get() then
+		--check for headers existing.
+		local f =io.open( wxadditionsRoot .. "/include/wx/link_additions.h" )
+		if f==nil then
+			error( "can't find include/wx/link_additions.h! - check the value of WXADDTIIONS (" .. wxadditionsRoot .. ")" )
+		end
+	
+		VerifyWxDlls( wxadditionsRoot, "/lib/vc_dll/wxmsw28_awx_vc.dll", "WXADDITIONS" )
+	end
+	
 
 	local winWxRuntimePath = wxadditionsRoot .. "\\lib\\gcc_dll\\"
 	local dllSuffix = "_gcc.dll"
@@ -403,3 +476,6 @@ function wx.ConfigureAdditions( libsToLink, wxVer )
 
 	configuration( {} )
 end
+
+
+

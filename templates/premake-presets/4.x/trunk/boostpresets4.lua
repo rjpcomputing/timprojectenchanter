@@ -44,6 +44,11 @@ boost = {}
 boost.numeric_version = 1.40
 boost.version = "1_40" -- default boost version
 
+--	The version of GCC that you are building for.
+--		Make sure that you leave the '.' out of the string. (i.e. "44" not "4.4")
+--		Defaults to "44" on Windows and "44" on Linux.
+boost.gcc_version = "44"
+
 if "windows" == os.get() then
 	boost.root = os.getenv( "BOOST_ROOT" )
 	if not boost.root then
@@ -71,17 +76,10 @@ end
 ---	Gets the Boost specific Toolset name. This only supports Visual C++ and
 --	GCC.
 --	TODO: Make this more flexable.
---	@param gccVer [DEF] {string} The version of GCC that you are building for.
---		Make sure that you leave the '.' out of the string. (i.e. "44" not "4.4")
---		Defaults to "44" on Windows and "44" on Linux.
+
 --	@return {string} String that contains the Boost specific target name.
-function boost.GetToolsetName( gccVer )
+function boost.GetToolsetName()
 	local toolsetName = ""
-	if "windows" == os.get() then
-		gccVer = gccVer or "44"
-	else
-		gccVer = gccVer or "44"
-	end
 
 	if _ACTION == "vs2003" then
 		toolsetName = "vc71"
@@ -93,9 +91,9 @@ function boost.GetToolsetName( gccVer )
 		toolsetName = "vc100"
 	elseif ActionUsesGCC() then
 		if "windows" == os.get() then
-			toolsetName = "mgw"..gccVer
+			toolsetName = "mgw"..boost.gcc_version
 		else
-			toolsetName = "gcc"..gccVer
+			toolsetName = "gcc"..boost.gcc_version
 		end
 	end
 
@@ -107,21 +105,19 @@ end
 --		name.
 --	@param isDebug [DEF] {boolean} If true it will generate the name of the debug
 --		version of the library. Defaults to false.
---	@param gccVer [DEF] {string} The version of GCC that you are building for.
---		Defaults to "43" on Windows and "42" on Linux.
 --  @param makeDllName true to make the dll's name
 --	Supported but not displayed options:
 --		- using-stlport - "Use the STLPort standard library rather than
 --		                   the default one supplied with your compiler"
 --	Comprimises:
 --		- Only supports VC and GCC
-function boost.LibName( libraryName, isDebug, gccVer, boostVer )
+function boost.LibName( libraryName, isDebug )
 	local name = ""
 
 	-- Toolset - target/compiler.
 	local toolset = ""
 	if "windows" == os.get() or _OPTIONS["boost-force-compiler-version"] then
-		toolset = "-" .. boost.GetToolsetName( gccVer )
+		toolset = "-" .. boost.GetToolsetName()
 	end
 	--print( "Toolset: ", toolset )
 
@@ -152,8 +148,8 @@ function boost.LibName( libraryName, isDebug, gccVer, boostVer )
 	-- Boost version
 	local boostVerSuffix = ""
 	if (not os.is("linux")) and (_OPTIONS["boost-shared"] or boost.numeric_version >= 1.45) then
-		if boostVer ~= "" then
-			boostVerSuffix = "-" .. boostVer
+		if boost.version ~= "" then
+			boostVerSuffix = "-" .. boost.version
 		end
 	end
 
@@ -161,6 +157,51 @@ function boost.LibName( libraryName, isDebug, gccVer, boostVer )
 	--print( name )
 
 	return name
+end
+
+function boost.LinkStaticLibFullPath( libraryName, isDebug )
+	linkoptions( "-l:" .. boost.root .. "/lib/lib" .. boost.LibName( libraryName, isDebug ) .. ".a" )
+end
+
+function boost.LinkLibName( libraryName, isDebug )
+	links( boost.LibName( libraryName, isDebug ) )
+end
+
+function boost.LinkSharedLibExceptRegex( libraryName, isDebug )
+	--[[
+	Boost.Regex forces static build with mingw, because
+	mingw has known bugs with a shared libraries. See:
+		https://svn.boost.org/trac/boost/ticket/3430
+	for the onging investigation.
+	]]
+
+	if "regex" == libraryName then
+		links { boost.LibName( libraryName, true ) }
+	else
+		local libprefix = ""
+		if boost.numeric_version >= 1.45 then
+			libprefix = "lib"
+		end
+		-- force linking to the dll
+		linkoptions { "-l:" .. libprefix .. boost.LibName( libraryName, true ) .. ".dll" }
+	end
+end
+
+function boost.AddLinksToConfiguration( libsToLink, isDebug, LibLinker )
+	for _, libraryName in ipairs( libsToLink ) do
+		LibLinker( libraryName, isDebug )
+	end
+end
+
+function boost.AddLinks( libsToLink, LibLinker )
+	if _OPTIONS["boost-link-debug"] then
+		configuration "Debug"
+			boost.AddLinksToConfiguration( libsToLink, true, LibLinker )
+		configuration "Release"
+		-- fall through to adding release libs
+	end
+
+	boost.AddLinksToConfiguration( libsToLink, false, LibLinker )
 end
 
 ---	Configure a C/C++ package to use Boost.
@@ -181,7 +222,6 @@ end
 --	Appended to package setup:
 --		package.includepaths			= (windows) { "$(BOOST_ROOT)" }
 --		package.libpaths				= (windows) { "$(BOOST_ROOT)/lib" }
---		package.linkoptions				= (GCC w/ dynamic-runtime) { "-static" }
 --
 --	NOTES:
 --		Only supports VC and GCC
@@ -189,7 +229,8 @@ end
 --	Example:
 --		boost.Configure( package, { "libsToLink" }, "44" )
 function boost.Configure( libsToLink, gccVer, boostVer )
-	boostVer = boostVer or boost.version
+	boost.version = boostVer or boost.version
+	boost.gcc_version = gccVer or boost.gcc_version
 
 	libsToLink = libsToLink or {}
 	-- Check to make sure that the libsToLink is valid.
@@ -203,78 +244,31 @@ function boost.Configure( libsToLink, gccVer, boostVer )
 		includedirs { "boost_utils" }
 	end
 
-	if os.is("windows") then
-		AddSystemPath( boost.root )
-
-		libdirs { boost.root .. "/lib" }
-		--(the following line prevents in boost: socket_types.hpp(27) : fatal error C1189: #error :  WinSock.h has already been included)
-		defines { "WIN32_LEAN_AND_MEAN" }
-	end
-
 	if _OPTIONS["boost-shared"] then
 		defines { "BOOST_ALL_DYN_LINK" }
 	end
 
-	if ActionUsesGCC() then
-		if not _OPTIONS["dynamic-runtime"] then
-			linkoptions { "-static" }
-		end
-	end
+	-- Set Boost libraries to link.
+	if os.is( "windows" ) then
+		AddSystemPath( boost.root )
 
-	-- Only add link libraries if not VC.
-	if not string.find( _ACTION or "", "vs*" ) then
-		-- Set Boost libraries to link.
-		if os.is( "windows" ) and _OPTIONS["boost-shared"] then
-			--[[
-			Boost.Regex forces static build with mingw, because
-			mingw has known bugs with a shared libraries. See:
-				https://svn.boost.org/trac/boost/ticket/3430
-			for the onging investigation.
-			]]
+		--(the following line prevents in boost: socket_types.hpp(27) : fatal error C1189: #error :  WinSock.h has already been included)
+		defines { "WIN32_LEAN_AND_MEAN" }
 
-			local libprefix = ""
-			if boost.numeric_version >= 1.45 then
-				libprefix = "lib"
-			end
-
-			if _OPTIONS["boost-link-debug"] then
-				configuration "Debug"
-				for _, v in ipairs( libsToLink ) do
-					if "regex" == v then
-						links { boost.LibName( v, true, gccVer, boostVer ) }
-					else
-						-- force linking to the dll
-						linkoptions { "-l:" .. libprefix .. boost.LibName( v, true, gccVer, boostVer ) .. ".dll" }
-					end
-				end
-				configuration "Release"
-				-- fall through to adding release libs
-			else
-				for _, v in ipairs( libsToLink ) do
-					if "regex" == v then
-						links { boost.LibName( v, false, gccVer, boostVer ) }
-					else
-						linkoptions { "-l:" .. libprefix .. boost.LibName( v, false, gccVer, boostVer ) .. ".dll" }
-					end
-				end
-			end
+		if ActionUsesMSVC() then
+			libdirs { boost.root .. "/lib" }
 		else
-			if ActionUsesGCC() then
+			-- Only add link libraries if not VC.
+			if _OPTIONS["boost-shared"] then
+				libdirs { boost.root .. "/lib" }
+				boost.AddLinks( libsToLink, boost.LinkSharedLibExceptRegex )
+			else
 				defines( "BOOST_THREAD_USE_LIB" ) -- vc is LIB by default, mingw needs this
-			end
-			if _OPTIONS["boost-link-debug"] then
-				configuration "Debug"
-				for _, v in ipairs( libsToLink ) do
-					links { boost.LibName( v, true, gccVer, boostVer ) }
-				end
-				configuration "Release"
-				-- fall through to adding release libs
-			end
-
-			for _, v in ipairs( libsToLink ) do
-				links { boost.LibName( v, false, gccVer, boostVer ) }
+				boost.AddLinks( libsToLink, boost.LinkStaticLibFullPath )
 			end
 		end
+	else
+		boost.AddLinks( libsToLink, boost.LinkLibName )
 	end
 
 	configuration(cfg.terms)
@@ -282,7 +276,8 @@ end
 
 function boost.CopyDynamicLibraries( libsToLink, destinationDirectory, gccVer, boostVer, copyDebug )
 	if _ACTION and ( _ACTION ~= "clean") then
-		boostVer = boostVer or boost.version
+		boost.version = boostVer or boost.version
+		boost.gcc_version = gccVer or boost.gcc_version
 		local shouldCopyDebugLibs = copyDebug
 		if copyDebug == nil then
 			shouldCopyDebugLibs = true
@@ -301,7 +296,7 @@ function boost.CopyDynamicLibraries( libsToLink, destinationDirectory, gccVer, b
 		if os.is("windows") then
 			function copyLibs( debugCopy )
 				for _, v in ipairs( libsToLink ) do
-					local libname = libprefix .. boost.LibName( v, debugCopy, gccVer, boostVer ) .. '.dll'
+					local libname = libprefix .. boost.LibName( v, debugCopy ) .. '.dll'
 					if ("regex" == v and ActionUsesGCC() and boost.numeric_version < 1.45 ) then
 						--[[
 						Boost.Regex forces static build with mingw, because

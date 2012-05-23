@@ -76,6 +76,12 @@ end
 
 newoption
 {
+	trigger     = "win-vs2005-vs2008-no-stdint-use-boost-types",
+	description	= "Windows VS2005 or VS2008 only: Use boost types to define stdint.h size-specific types."
+}
+
+newoption
+{
 	trigger		= "with-gprof",
 	description	= "Enable information to be added for profiling by gprof"
 }
@@ -99,6 +105,12 @@ if os.is("linux") then
 		description	= "Linux only, set rpath on the linker line to find shared libraries next to executable"
 	}
 end
+
+newoption
+{
+   trigger     = "large-address-aware",
+   description = "Enable large address awareness for 32-bit programs which allow them to access memory > the 2GB limit."
+}
 
 presets = {}
 
@@ -248,6 +260,51 @@ function Configure()
 		end
 	end
 
+	-- targetdir, implibdir, and libdirs defaults --------------------------------------
+	configuration "x32 or native"
+		if nil == SolutionTargetDir( false ) then
+			if "StaticLib" == kindVal then
+				targetdir( solution().basedir .. "/lib" )
+			else
+				targetdir( solution().basedir .. "/bin" )
+			end
+		end
+		if nil == next( SolutionLibDirs( false ) ) then
+			libdirs( { solution().basedir .. "/lib", solution().basedir .. "/bin" } )
+		end
+		--[[ TODO: When the build agents are upgraded to premake 4.4, enable this line. Until then, we rely on the fact that
+				our linux build agents all use 64-bit linux.			
+		]]		
+		--if os.is( "windows" ) or ( os.is( "linux" ) and not os.is64bit() ) then
+		if os.is( "windows" ) then
+			if not ( kindVal == "StaticLib" ) then
+				if _OPTIONS[ "large-address-aware" ] or _OPTIONS["large-address-aware"] == "yes" then
+					if ActionUsesGCC() then
+						linkoptions( "-Wl,--large-address-aware" )
+					end
+					if ActionUsesMSVC() then
+						linkoptions( "/LARGEADDRESSAWARE" )
+					end
+				end
+			end
+		end
+
+	-- 64 bit compatibility -------------------------------------------------------------------
+	configuration "x64"
+		if nil == SolutionTargetDir( false ) then
+			if "StaticLib" == kindVal then
+				targetdir( solution().basedir .. "/lib64" )
+			else
+				targetdir( solution().basedir .. "/bin64" )
+			end
+		end
+		if nil == next( SolutionLibDirs( false ) ) then
+			libdirs( { solution().basedir .. "/lib64", solution().basedir .. "/bin64" } )
+		end
+		if os.get() == "windows" then
+			defines( { "_WIN64" } )
+		end
+
 	configuration( "not dynamic-runtime" )
 		flags( "StaticRuntime" )
 
@@ -290,6 +347,7 @@ function Configure()
 	if os.is( "linux" ) then
 		local useRpath = true
 		local rpath="$$``ORIGIN"
+		linkoptions( "-lrt" )
 
 		local rpathOption = _OPTIONS[ "rpath" ]
 
@@ -325,6 +383,15 @@ function Configure()
 		files( "*.rc" )
 		defines( { "_WIN32", "WIN32", "_WINDOWS", "NOMINMAX", "_WIN32_WINNT=" .. presets.WindowsAPIVersion, "WINVER=" .. presets.WindowsAPIVersion } )
 
+		if _OPTIONS["win-vs2005-vs2008-no-stdint-use-boost-types"] then
+			defines "WIN_VS2005_VS2008_NO_STDINT_USE_BOOST_TYPES"
+
+			local boostRoot = os.getenv( "BOOST_ROOT" )
+			if boostRoot then
+				includedirs( boostRoot )
+			end
+		end
+
 	configuration( { "windows", "not StaticLib" } )
 		links( { "psapi", "ws2_32", "version", "winmm" } )
 
@@ -337,10 +404,10 @@ function Configure()
 
 	if _OPTIONS["with-gprof"] then
 		if ActionUsesGCC() then
-		-- Add profiling information
+			-- Add profiling information
 			configuration( "Debug" )
-			buildoptions( "-pg" )
-			linkoptions( "-pg" )
+				buildoptions( "-pg" )
+				linkoptions( "-pg" )
 		else
 			error( "gprof can only be used with gcc" )
 		end
@@ -348,10 +415,10 @@ function Configure()
 
 	if _OPTIONS["with-gcov"] then
 		if ActionUsesGCC() then
-		-- Add coverage information
+			-- Add coverage information
 			configuration( "Debug" )
-			buildoptions( { "-fprofile-arcs", "-ftest-coverage" } )
-			links( "gcov" )
+				buildoptions( { "-fprofile-arcs", "-ftest-coverage" } )
+				links( "gcov" )
 		else
 			error( "gcov can only be used with gcc" )
 		end
@@ -392,11 +459,31 @@ function ConfigureLibrary( libName, includePath, sharedOptionName, usingDllDefin
 		links( libName )
 	end
 
-	if includePath then
-		local success, msg = pcall( includedirs, includePath )
-		if not success then
-			error( "ConfigureLibrary( " .. libName .. " ): " .. msg, 2 )
+	local function CheckDirOrLowercaseDir( dir )
+		local lowerDir = string.lower( dir )
+		if os.isdir( dir ) then
+			return dir
+		elseif os.isdir( lowerDir ) then
+			return lowerDir
+		else
+			local supplimentalErrorMsg = ""
+			if dir ~= lowerDir then
+				supplimentalErrorMsg = "or '" .. lowerDir .. "' "
+			end
+			error( "ConfigureLibrary( " .. libName .. " ): The additional include directory '" .. dir .. "' " .. supplimentalErrorMsg .. "does not exist", 4 )
 		end
+	end
+
+	local function AddIncludeDirWithValidation( dir )
+		dir = CheckDirOrLowercaseDir( dir )
+		local success, msg = pcall( includedirs, dir )
+		if not success then
+			error( "ConfigureLibrary( " .. libName .. " ): " .. msg, 3 )
+		end
+	end
+
+	if includePath then
+		AddIncludeDirWithValidation( includePath )
 	else
 		if unittest and unittest.projectUnderTestKind then
 			kindVal = unittest.projectUnderTestKind
@@ -404,10 +491,23 @@ function ConfigureLibrary( libName, includePath, sharedOptionName, usingDllDefin
 
 		presets.Trace( "Configuring " .. libName .. " for " .. project().name .. ", when " .. project().name .. " is a " .. kindVal )
 
-		if ( (kindVal == "StaticLib") or (kindVal == "SharedLib") ) then
-			includedirs( "../" .. libName )
+		local upPath = "../" .. libName
+		local downPath = libName
+
+		if ( kindVal == "StaticLib" ) then
+			AddIncludeDirWithValidation( upPath )
+		elseif ( kindVal == "SharedLib" ) then
+			local hasUpPath, upPath = pcall( CheckDirOrLowercaseDir, upPath )
+			local hasDownPath, downPath = pcall( CheckDirOrLowercaseDir, downPath )
+			if hasDownPath then
+				AddIncludeDirWithValidation( downPath )
+			elseif hasUpPath then
+				AddIncludeDirWithValidation( upPath )
+			else
+				error( "ConfigureLibrary( " .. libName .. " ): The additional include directory cannot be determined because '" .. upPath .. "' and '" .. downPath .. "'", 3 )
+			end
 		else
-			includedirs( libName )
+			AddIncludeDirWithValidation( downPath )
 		end
 	end
 
@@ -415,6 +515,12 @@ function ConfigureLibrary( libName, includePath, sharedOptionName, usingDllDefin
 		defines( usingDllDefine or ( string.upper( libName ) .. "_USING_DLL" ) )
 	end
 
+	if os.is( "windows" ) then
+		if _OPTIONS["win-vs2005-vs2008-no-stdint-use-boost-types"] then
+			defines "WIN_VS2005_VS2008_NO_STDINT_USE_BOOST_TYPES"
+			AddIncludeDirWithValidation( os.getenv( "BOOST_ROOT" ) )
+		end
+	end
 end
 
 -- Adds path as a system path in gcc so warnings are ignored
@@ -552,12 +658,40 @@ function MakeVersion( nameOfFile, workingDirectory )
 	end
 end
 
-function SolutionTargetDir()
+function SolutionTargetDir( setError )
+	setError = setError or false
 	local sln = solution()
 	if ( sln.blocks[1] and sln.blocks[1].targetdir ) then
 		return solution().blocks[1].targetdir
 	end
-	return nil
+
+	if setError then
+		error( "targetdir has not been set on the solution", 2 )
+	end
+end
+
+function SolutionImpLibDir( setError )
+	setError = setError or false
+	local sln = solution()
+	if ( sln.blocks[1] and sln.blocks[1].implibdir ) then
+		return solution().blocks[1].implibdir
+	end
+
+	if setError then
+		error( "implibdir has not been set on the solution", 2 )
+	end
+end
+
+function SolutionLibDirs( setError )
+	setError = setError or false
+	local sln = solution()
+	if ( sln.blocks[1] and sln.blocks[1].libdirs ) then
+		return solution().blocks[1].libdirs
+	end
+
+	if setError then
+		error( "libdirs has not been set on the solution", 2 )
+	end
 end
 
 function ActionUsesGCC()
@@ -607,48 +741,64 @@ function WindowsCopy( ... )
 end
 
 function CopyDebugCRT( destinationDirectory )
-	CopyCRT( destinationDirectory, true )
+	CopyCRT( destinationDirectory, true, false )
+end
+
+function Copy64BitCRT( destinationDirectory )
+	CopyCRT( destinationDirectory, false, true )
+end
+
+function Copy64BitDebugCRT( destinationDirectory )
+	CopyCRT( destinationDirectory, true, true )
 end
 
 -- Copy the redist runtime dlls
-function CopyCRT( destinationDirectory, copyDebugCRT )
+function CopyCRT( destinationDirectory, copyDebugCRT, copy64Bit )
 
-	local copyDebugCRT = copyDebugCRT or false
+	copyDebugCRT = copyDebugCRT or false
+	copy64Bit = copy64Bit or false
 
 	if ( os.get() == "windows" ) then
 		local sourcePath = ""
-		if ( _ACTION:find( "vs20" ) ) then
-			local vsdir = ""
-			local vcname = ""
-			if _ACTION == "vs2005" then
-				vsdir = "Microsoft Visual Studio 8"
-				vcname = "VC80"
-			elseif _ACTION == "vs2008" then
-				vsdir = "Microsoft Visual Studio 9.0"
-				vcname = "VC90"
-			elseif _ACTION == "vs2010" then
-				vsdir = "Microsoft Visual Studio 10.0"
-				vcname = "VC100"
-			end
+		if ( _ACTION ) then
+			if ( _ACTION:find( "vs20" ) ) then
+				local vsdir = ""
+				local vcname = ""
+				local arch = "x86"
+				if copy64Bit then
+					arch = "x64"
+				end
 
-			local libsToCopy = {}
-			local programFiles = os.getenv( "ProgramFiles" )
-			if copyDebugCRT then
-				libsToCopy = os.matchfiles(programFiles  .. '/' .. vsdir .. '/VC/redist/Debug_NonRedist/x86/Microsoft.' .. vcname .. '.DebugCRT/*' )
+				if _ACTION == "vs2005" then
+					vsdir = "Microsoft Visual Studio 8"
+					vcname = "VC80"
+				elseif _ACTION == "vs2008" then
+					vsdir = "Microsoft Visual Studio 9.0"
+					vcname = "VC90"
+				elseif _ACTION == "vs2010" then
+					vsdir = "Microsoft Visual Studio 10.0"
+					vcname = "VC100"
+				end
+
+				local libsToCopy = {}
+				local programFiles = os.getenv( "ProgramFiles" )
+				if copyDebugCRT then
+					libsToCopy = os.matchfiles(programFiles  .. '/' .. vsdir .. '/VC/redist/Debug_NonRedist/'..arch..'/Microsoft.' .. vcname .. '.DebugCRT/*' )
+				else
+					local crtPath = programFiles .. '/' .. vsdir .. '/VC/redist/'..arch..'/Microsoft.' .. vcname .. '.CRT/*'
+					libsToCopy = os.matchfiles(crtPath)
+					print ( "found " .. #libsToCopy .. " crt files to copy from " .. crtPath )
+				end
+				for _, lib in ipairs( libsToCopy ) do
+					WindowsCopy( lib, destinationDirectory )
+				end
 			else
-				local crtPath = programFiles .. '/' .. vsdir .. '/VC/redist/x86/Microsoft.' .. vcname .. '.CRT/*'
-				libsToCopy = os.matchfiles(crtPath)
-				print ( "found " .. #libsToCopy .. " crt files to copy from " .. crtPath )
-			end
-			for _, lib in ipairs( libsToCopy ) do
-				WindowsCopy( lib, destinationDirectory )
-			end
-		else
-			sourcePath = "C:/MinGW4/bin/mingwm10.dll"
-			WindowsCopy( sourcePath, destinationDirectory )
+				sourcePath = "C:/MinGW4/bin/mingwm10.dll"
+				WindowsCopy( sourcePath, destinationDirectory )
 
-			sourcePath = "C:/MinGW4/bin/libgcc_s_dw2-1.dll"
-			WindowsCopy( sourcePath, destinationDirectory )
+				sourcePath = "C:/MinGW4/bin/libgcc_s_dw2-1.dll"
+				WindowsCopy( sourcePath, destinationDirectory )
+			end
 		end
 	end
 end
@@ -663,9 +813,11 @@ end
 -- Original author: Mark Edgar
 -- Licensed under the same terms as Lua (MIT license).
 --
-function presets.Bin2C( sourceFile, destFile, variableName )
+function presets.Bin2C( sourceFile, destFile, variableName, dataType )
 
 	local content = assert( io.open( sourceFile,"rb" ) ):read"*all"
+
+	presets.Trace( "Bin2C content size: " .. content:len() )
 
 	local dump do
 		local numberTable={}
@@ -681,16 +833,18 @@ function presets.Bin2C( sourceFile, destFile, variableName )
 	variableName = variableName or string.lower( string.gsub( filename, "%.", "_" ) )
 	destFile = destFile or filename .. ".h"
 	local headerGuard = string.upper( string.gsub( path.getname( destFile ), "%.", "_" ) )
+	local arrayDataType = dataType or "unsigned char"
 	local output = assert( io.open( destFile, "w" ) )
-	output:write (
+	assert( output:write (
 	"/* code automatically generated by bin2c -- DO NOT EDIT */\n",
 	"#ifndef ", headerGuard, "\n",
 	"#define ", headerGuard, "\n\n",
-	"static const unsigned char ", variableName, "[] = \n",
+	"static const " .. arrayDataType .. " ", variableName, "[] = \n",
 	"{\n\t",
 	dump(content), "\n",
 	"};\n\n",
-	"#endif //", headerGuard, "\n" )
+	"#endif //", headerGuard, "\n" ) )
+	assert( output:flush() );
 end
 
 ---
