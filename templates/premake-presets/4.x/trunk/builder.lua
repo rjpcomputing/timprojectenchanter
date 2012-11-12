@@ -140,7 +140,7 @@ local function FindFirstFile( path, pattern )
     for file in lfs.dir( path ) do
         if file ~= "." and file ~= ".." then
             local f = path.."/"..file
-            --print( "\t "..f )
+            --print( "\t "..f ); io.stdout:flush()
             local attr = lfs.attributes( f )
             assert ( type( attr ) == "table" )
             if attr.mode == "directory" then
@@ -161,7 +161,7 @@ end
 local function RemoveAll( pattern )
 	local files = dir.getfiles( ".", pattern )
 	for _, file in ipairs( files )do
-		print( "Cleaning old file:", file )
+		print( "Cleaning old file:", file ); io.stdout:flush()
 		os.remove( file )
 	end
 end
@@ -193,10 +193,10 @@ local function GenerateProjectFiles( tget, options, args, shouldUsePremake4 )
 	end
 
 	if premakeRet ~= 0 then
-		print( string.format( "Premake error (%i) occured. Converted exit code to 1", premakeRet ) )
+		print( string.format( "Premake error (%i) occured. Converted exit code to 1", premakeRet ) ); io.stdout:flush()
 		os.exit( 1 )
 	end
-	print( "" )
+	print( "" ); io.stdout:flush()
 end
 
 local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles )
@@ -226,7 +226,7 @@ local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles )
 		print( cleanCmd ); io.stdout:flush()
 		local makeRet = os.execute( cleanCmd )
 		if makeRet ~= 0 then
-			print( string.format( "Make clean error (%i) occured. Converted exit code to 1", makeRet ) )
+			print( string.format( "Make clean error (%i) occured. Converted exit code to 1", makeRet ) ); io.stdout:flush()
 			os.exit( 1 )
 		end
 	end
@@ -236,7 +236,7 @@ local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles )
 	print( makeCmd ); io.stdout:flush()
 	local makeRet = os.execute( makeCmd )
 	if makeRet ~= 0 then
-		print( string.format( "Make error (%i) occured. Converted exit code to 1", makeRet ) )
+		print( string.format( "Make error (%i) occured. Converted exit code to 1", makeRet ) ); io.stdout:flush()
 		os.exit( 1 )
 	end
 end
@@ -278,9 +278,9 @@ local function ExecuteVs2005Builder( cfg, shouldClean )
 		print( "Cleaning solution..." ); io.stdout:flush()
 		local cleanCmd = string.format( '""%s" "%s" /clean %s"', vsPath, solutionFile, cfg )
 		local vsRet = os.execute( cleanCmd )
-		--print( "VS2005 clean process exited with code "..( vsRet or "<nil>" ) )
+		--print( "VS2005 clean process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
 		if vsRet ~= 0 then
-			print( string.format( "VS2005 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+			print( string.format( "VS2005 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
 			os.exit( 1 )
 		end
 	end
@@ -289,9 +289,9 @@ local function ExecuteVs2005Builder( cfg, shouldClean )
 	print( "Building solution..." ); io.stdout:flush()
 	local buildCmd = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
 	local vsRet = os.execute( buildCmd )
-	--print( "VS2005 build process exited with code "..( vsRet or "<nil>" ) )
+	--print( "VS2005 build process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
 	if vsRet ~= 0 then
-		print( string.format( "VS2005 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+		print( string.format( "VS2005 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
 		os.exit( 1 )
 	end
 end
@@ -328,9 +328,9 @@ local function ExecuteVs2008Builder( cfg, shouldClean )
 		print( "Cleaning solution..." ); io.stdout:flush()
 		local cleanCmd = string.format( '""%s" "%s" /clean %s"', vsPath, solutionFile, cfg )
 		local vsRet = os.execute( cleanCmd )
-		--print( "VS2008 clean process exited with code "..( vsRet or "<nil>" ) )
+		--print( "VS2008 clean process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
 		if vsRet ~= 0 then
-			print( string.format( "VS2008 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+			print( string.format( "VS2008 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
 			os.exit( 1 )
 		end
 	end
@@ -339,9 +339,9 @@ local function ExecuteVs2008Builder( cfg, shouldClean )
 	print( "Building solution..." ); io.stdout:flush()
 	local buildString = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
 	local vsRet = os.execute( buildString )
-	--print( "VS2008 build process exited with code "..( vsRet or "<nil>" ) )
+	--print( "VS2008 build process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
 	if vsRet ~= 0 then
-		print( string.format( "VS2008 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+		print( string.format( "VS2008 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
 		os.exit( 1 )
 	end
 end
@@ -378,20 +378,20 @@ local function ExecuteVs2010Builder( cfg, shouldClean )
 		print( "Cleaning solution..." ); io.stdout:flush()
 		local cleanCmd = string.format( '""%s" "%s" /clean %s"', vsPath, solutionFile, cfg )
 		local vsRet = os.execute( cleanCmd )
-		--print( "VS2010 clean process exited with code "..( vsRet or "<nil>" ) )
+		--print( "VS2010 clean process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
 		if vsRet ~= 0 then
-			print( string.format( "VS2010 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+			print( string.format( "VS2010 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
 			os.exit( 1 )
 		end
 	end
 
 	-- Launch vc to build
 	print( "Building solution..." ); io.stdout:flush()
-	local buildString = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
+	local buildString = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg ); io.stdout:flush()
 	local vsRet = os.execute( buildString )
-	--print( "VS2010 build process exited with code "..( vsRet or "<nil>" ) )
+	--print( "VS2010 build process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
 	if vsRet ~= 0 then
-		print( string.format( "VS2010 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) )
+		print( string.format( "VS2010 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
 		os.exit( 1 )
 	end
 end
@@ -428,15 +428,15 @@ local function ExecuteINNOBuilder( file, shouldClean )
 
 		local installerRet = os.execute( installerCmd )
 
-		print( "INNO process exited with code "..( installerRet or "<nil>" ) )
+		print( "INNO process exited with code "..( installerRet or "<nil>" ) ); io.stdout:flush()
 
 		if installerRet ~= 0 then
 			lfs.chdir( curDir )
-			print( string.format( "INNO error (%i) occured. Converted exit code to 1", installerRet ) )
+			print( string.format( "INNO error (%i) occured. Converted exit code to 1", installerRet ) ); io.stdout:flush()
 			os.exit( 1 )
 		end
 	else
-		print( "Only Windows is supported right now." )
+		print( "Only Windows is supported right now." ); io.stdout:flush()
 		if shouldClean then
 			-- Clean all old installer files.
 			RemoveAll( "*.deb" )
@@ -472,15 +472,15 @@ local function ExecuteNSISBuilder( file )
 
 		local installerRet = os.execute( installerCmd )
 
-		print( "NSIS process exited with code "..( installerRet or "<nil>" ) )
+		print( "NSIS process exited with code "..( installerRet or "<nil>" ) ); io.stdout:flush()
 
 		if installerRet ~= 0 then
 			lfs.chdir( curDir )
-			print( string.format( "NSIS error (%i) occured. Converted exit code to 1", installerRet ) )
+			print( string.format( "NSIS error (%i) occured. Converted exit code to 1", installerRet ) ); io.stdout:flush()
 			os.exit( 1 )
 		end
 	else
-		print( "Only Windows is supported right now." )
+		print( "Only Windows is supported right now." ); io.stdout:flush()
 	end
 
 	lfs.chdir( curDir )
@@ -512,7 +512,7 @@ local function ExecuteGPack( cmdLine )
 	-- Invoke packager.lua which will create bundles and deploy them to the bundle repository
 	print( cmdLine ); io.stdout:flush()
 	local cmdRet = os.execute( cmdLine )
-	print( "Packager exited with code "..( cmdRet or "<nil>" ) )
+	print( "Packager exited with code "..( cmdRet or "<nil>" ) ); io.stdout:flush()
 end
 
 Targets =
@@ -535,7 +535,7 @@ function main()
 	local args = lapp [[
 	Builds the current project. Run from the root level.
 
-	-t,--target         (string)            One of the following: vs2005, vs2008, gnu, or gmake.
+	-t,--target         (string)            One of the following: vs2005, vs2008, vs2010, gnu, or gmake.
 	-b,--build          (default Release)   Project-specific build configuration, usually Debug or Release.
 	-i,--installer      (default none)      One of the following: inno or nsis.
 	-f,--installerfile  (default none)      The installer source file to pass to the installer, if needed.
@@ -543,6 +543,7 @@ function main()
 	-m,--teamcity       (default true)      Enable teamcity output.
 	-c,--clean                              Clean project sources before building.
 	-q,--premake4                           Use premake4
+	-s,--saveinstallers                     Save any previous installers in the install directory
 	]]
 
 	-- Setup the build configuration
@@ -611,7 +612,8 @@ function main()
 
 	-- Optionally build the installer
 	if installer then
-		Installers[ installer ]( installerFile, shouldClean )
+		local cleanInstallers = not args.saveinstallers
+		Installers[ installer ]( installerFile, cleanInstallers )
 	end
 end
 

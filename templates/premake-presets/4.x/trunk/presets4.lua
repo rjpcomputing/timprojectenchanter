@@ -104,12 +104,30 @@ if os.is("linux") then
 		trigger		= "rpath",
 		description	= "Linux only, set rpath on the linker line to find shared libraries next to executable"
 	}
+
+	newoption
+	{
+		trigger		= "soname",
+		description	= "Linux only, set soname on the linker line"
+	}
 end
 
 newoption
 {
    trigger     = "large-address-aware",
    description = "Enable large address awareness for 32-bit programs which allow them to access memory > the 2GB limit."
+}
+
+newoption
+{
+	trigger		= "openmp",
+	description	= "Enable OpenMP support which will add the OPENMP_ENABLED define."
+}
+
+newoption
+{
+	trigger = "teamcity",
+	description = "Supplied when invoked by TeamCity"
 }
 
 presets = {}
@@ -260,6 +278,26 @@ function Configure()
 		end
 	end
 
+	if _OPTIONS["openmp"] then
+		defines "OPENMP_ENABLED"
+
+		if ActionUsesGCC() then
+			buildoptions ( "-fopenmp" )
+			if kindVal ~= "StaticLib" then
+				links		 ( { "gomp", "pthread" } )
+			end
+			linkoptions	 ( "-fopenmp" )
+
+			if not ompCopied then
+				WindowsCopy( "C:\\MinGW4\\lib\\gcc\\mingw32\\bin\\libgomp-1.dll", SolutionTargetDir() )
+				WindowsCopy( "C:\\MinGW4\\bin\\pthreadGC2.dll", SolutionTargetDir() )
+				ompCopied = true
+			end
+		elseif ActionUsesMSVC() then
+			buildoptions ( "/openmp" )
+		end
+	end
+
 	-- targetdir, implibdir, and libdirs defaults --------------------------------------
 	configuration "x32 or native"
 		if nil == SolutionTargetDir( false ) then
@@ -273,8 +311,8 @@ function Configure()
 			libdirs( { solution().basedir .. "/lib", solution().basedir .. "/bin" } )
 		end
 		--[[ TODO: When the build agents are upgraded to premake 4.4, enable this line. Until then, we rely on the fact that
-				our linux build agents all use 64-bit linux.			
-		]]		
+				our linux build agents all use 64-bit linux.
+		]]
 		--if os.is( "windows" ) or ( os.is( "linux" ) and not os.is64bit() ) then
 		if os.is( "windows" ) then
 			if not ( kindVal == "StaticLib" ) then
@@ -345,10 +383,13 @@ function Configure()
 		end
 
 	if os.is( "linux" ) then
+		if kindVal ~= "StaticLib" then
+			linkoptions( "-lrt" )
+		end
+
+		-- Set rpath
 		local useRpath = true
 		local rpath="$$``ORIGIN"
-		linkoptions( "-lrt" )
-
 		local rpathOption = _OPTIONS[ "rpath" ]
 
 		if rpathOption then
@@ -362,11 +403,46 @@ function Configure()
 		if useRpath then
 			linkoptions( "-Wl,-rpath," .. rpath )
 		end
+
+		-- Set soname
+		local useSoname = true
+		local function BuildSoname()
+			local soname =
+			{
+				targetname	= presets.GetCustomValue( "targetname" ),
+				extension	= presets.GetCustomValue( "targetextension" ),
+				prefix		= presets.GetCustomValue( "targetprefix" ),
+				suffix		= presets.GetCustomValue( "targetsuffix" ),
+			}
+			local ret = ""
+			if soname.prefix then ret = ret .. soname.prefix end
+			if soname.targetname then ret = ret .. soname.targetname end
+			if soname.suffix then ret = ret .. soname.suffix end
+			if soname.extension then ret = ret .. "." .. soname.extension end
+
+			return ret
+		end
+
+		local soname = BuildSoname()
+		local sonameOption = _OPTIONS[ "soname" ]
+
+		if sonameOption then
+			if "no" == sonameOption or "" == sonameOption then
+				useSoname = false
+			else
+				soname = sonameOption
+			end
+		end
+
+		if useSoname then
+			linkoptions( "-Wl,-soname," .. soname )
+		end
 	end
 
 	configuration( "vs*" )
 		flags( { "SEH", "No64BitChecks" } )
 		defines( { "_CRT_SECURE_NO_DEPRECATE", "_SCL_SECURE_NO_WARNINGS", "_CRT_NONSTDC_NO_DEPRECATE" } )
+		buildoptions( "/we 4150" )
 
 	configuration( { "vs*", "release-with-debug-symbols", "Release", "not StaticLib" } )
 		linkoptions "/DEBUG"
@@ -418,7 +494,9 @@ function Configure()
 			-- Add coverage information
 			configuration( "Debug" )
 				buildoptions( { "-fprofile-arcs", "-ftest-coverage" } )
-				links( "gcov" )
+				if kindVal ~= "StaticLib" then
+					links( "gcov" )
+				end
 		else
 			error( "gcov can only be used with gcc" )
 		end

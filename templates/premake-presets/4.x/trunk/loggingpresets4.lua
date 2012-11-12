@@ -44,8 +44,8 @@ function logging.Configure( includePath )
 		end
 	end
 
-	if os.is( "linux" ) then
-		linkoptions( "-lrt" )
+	if os.is( "linux" ) and kindVal ~= "StaticLib" then
+		links( "rt" )
 	end
 
 	if ( kindVal ~= "StaticLib" ) then

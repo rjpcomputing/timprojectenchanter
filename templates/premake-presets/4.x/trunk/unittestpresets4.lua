@@ -16,12 +16,6 @@
 
 newoption
 {
-	trigger = "teamcity",
-	description = "Unit test performed for Team City"
-}
-
-newoption
-{
 	trigger = "maxtesttime",
 	description = "Maximum number of ms allowed for an individual unit test"
 }
@@ -36,10 +30,11 @@ newoption
 -- Namespace
 unittest =
 {
-	unitTestPackage	= false,				-- Tracks if the unit test packages have been 'dopackage()'ed.
-	mockPackage		= false,				-- Tracks if the mock packages have been 'dopackage()'ed.
-	unitTestEnabled	= false,				-- Tracks if any package has called unittest.Configure().
-	mockEnabled		= false,				-- Tracks if any package has called unittest.Configure() with mocking support.
+	unitTestPackage	= false,				-- Tracks if the unit test project have been 'dofile()'ed.
+	mockPackage		= false,				-- Tracks if the mock project have been 'dofile()'ed.
+	unitTestEnabled	= false,				-- Tracks if any project has called unittest.Configure().
+	mockEnabled		= false,				-- Tracks if any project has called unittest.Configure() with mocking support.
+	onlyOneTestProject = false,				-- Tracks if any project has used the '-only-tests' option
 
 	unitTestPath	= "unittest++/unittestpp4.lua",
 	googleMockPath	= "googlemock/googlemock4.lua",
@@ -116,8 +111,11 @@ local function DoUnitTestSetup( inputFiles, inputExcludes )
 	files { inputFiles, unitTestDir .. "/main.cpp" }
 	excludes { inputExcludes }
 	includedirs { unitTestDir, unitTestDir .. "/src" }
-	links { "UnitTest++" }
-
+	
+	local kindVal = presets.GetCustomValue( "kind" )
+	if kindVal ~= "StaticLib" then
+		links { "UnitTest++" }
+	end
 	unittest.unitTestEnabled = true
 end
 
@@ -130,7 +128,11 @@ local function DoMockTestSetup()
 	end
 
 	includedirs { mockDir .. "/gtest/include", mockDir .. "/include", mockdir }
-	links { "GoogleMock", "GoogleTest" }
+	
+	local kindVal = presets.GetCustomValue( "kind" )
+	if kindVal ~= "StaticLib" then
+		links { "GoogleMock", "GoogleTest" }
+	end
 	defines { "USE_GMOCK" }
 
 	unittest.mockEnabled = true
@@ -163,25 +165,57 @@ function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock, wit
 	newoption
 	{
 		trigger = onlyTest,
-		description = "Only create the test project for " .. pkgName
+		description = "Only create the test project for " .. pkgName .. ", and no other test projects"
 	}
 
 	-- Create the return variable
 	local createdTestProject = false
 
 	-- Add the package to the project if being tested.
-	if ( not _OPTIONS[disableTest] ) and ( not _OPTIONS[disableAllTests] ) then
+	if ( not _OPTIONS[disableTest] ) and ( not _OPTIONS[disableAllTests] ) and ( not unittest.onlyOneTestProject ) then
 
-		if ( _OPTIONS[onlyTest] ) then
-			-- remove original project
-			local origProject = solution().projects[pkgName]
-			for k, v in ipairs( solution().projects ) do
-				if origProject == v then
-					table.remove( solution().projects, k )
-					break
+		if ( _OPTIONS[onlyTest] ) then -- remove original project and all other tests projects
+
+			-- list of projects to remove, preloaded with the orignal project
+			local projectsToRemove = { pkgName }
+
+			-- search by naming convention for other tests projects to remove
+			for solutionProjectName, _ in pairs( solution().projects ) do
+				if (type( solutionProjectName ) == "string") and solutionProjectName:find( "-tests" ) then
+					table.insert( projectsToRemove, solutionProjectName )
 				end
 			end
-			solution().projects[pkgName] = nil
+
+			-- a function to remove a project
+			function unittest.RemoveProject( nameOfProjectToRemove )
+				-- the projects table has projects sorted by both name and index
+
+				-- get project object
+				local projectObject = solution().projects[nameOfProjectToRemove]
+
+				-- search for it in the indexed portion
+				for index, object in ipairs( solution().projects ) do
+
+					if object == projectObject then -- the object matches
+
+						-- remove from the indexed portion
+						table.remove( solution().projects, index )
+
+						-- remove from the named portion
+						solution().projects[nameOfProjectToRemove] = nil
+
+						break
+					end
+				end
+			end
+
+			-- remove all the unwanted projects
+			for _, nameOfProjectToRemove in ipairs( projectsToRemove ) do
+				unittest.RemoveProject( nameOfProjectToRemove )
+			end
+
+			-- prevent new tests projects from being created
+			unittest.onlyOneTestProject = true
 		end
 
 		project( testName )

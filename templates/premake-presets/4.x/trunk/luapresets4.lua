@@ -58,16 +58,23 @@ function lua.Configure( luaVer )
 		includedirs	{ "/usr/include/lua" .. luaVer }
 	end
 
+	local kindVal = presets.GetCustomValue( "kind" ) or ""
 	if "windows" == os.get() and _OPTIONS["lua-link-debug"] then
 		cfg = configuration()
 
 		configuration "Debug"
-			links	{ "lua" .. luaVer .. "d" }
+			if kindVal ~= "StaticLib" then
+				links	{ "lua" .. luaVer .. "d" }
+			end
 		configuration( "Release" )
-			links	{ "lua" .. luaVer }
+			if kindVal ~= "StaticLib" then
+				links	{ "lua" .. luaVer }
+			end
 
 		configuration(cfg.terms)
 	else
-		links { "lua" .. luaVer }
+		if kindVal ~= "StaticLib" then
+			links { "lua" .. luaVer }
+		end
 	end
 end

@@ -188,8 +188,11 @@ function boost.LinkSharedLibExceptRegex( libraryName, isDebug )
 end
 
 function boost.AddLinksToConfiguration( libsToLink, isDebug, LibLinker )
-	for _, libraryName in ipairs( libsToLink ) do
-		LibLinker( libraryName, isDebug )
+	local kindVal = presets.GetCustomValue( "kind" ) or ""
+	if ( kindVal ~= "StaticLib" ) then
+		for _, libraryName in ipairs( libsToLink ) do
+			LibLinker( libraryName, isDebug )
+		end
 	end
 end
 
@@ -257,7 +260,7 @@ function boost.Configure( libsToLink, gccVer, boostVer )
 
 		if ActionUsesMSVC() then
 			libdirs { boost.root .. "/lib" }
-		else
+		else 
 			-- Only add link libraries if not VC.
 			if _OPTIONS["boost-shared"] then
 				libdirs { boost.root .. "/lib" }
