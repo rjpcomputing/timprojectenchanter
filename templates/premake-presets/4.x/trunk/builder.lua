@@ -46,6 +46,29 @@ function IsPosix()
 	return not IsWindows()
 end
 
+function GccRoot()
+	if not IsWindows() then
+		return ""
+	end
+	
+	local gccRoot = os.getenv( "GCC_ROOT" )
+	if not gccRoot then
+		gccRoot = "C:\\MinGW4"
+	end
+	if not path.exists( gccRoot ) then
+		error( "No valid GCC installed at'" .. gccRoot .. "', make sure the environment variable 'GCC_ROOT' points to a valid GCC installation" )
+	end
+	return gccRoot
+end
+
+function GccBinDir()
+	if not IsWindows() then
+		return ""
+	end
+	
+	return presets.GccRoot() .. "\\bin\\"
+end
+
 -- Defaults to two processors
 local function GetNumberOfProcessors()
 	local numOfProcessors = "2"
@@ -168,8 +191,19 @@ end
 
 -- BUILDER FUNCTIONS ----------------------------------------------------------
 --
+
+local function ExecuteCommand( commandLine )
+	print( commandLine ); io.stdout:flush()
+	local returnCode = os.execute( commandLine )
+
+	if returnCode ~= 0 then
+		print( string.format( "Error (%i) occured. Converted exit code to 1. Failed Command Line: " .. commandLine, returnCode or -1 ) ); io.stdout:flush()
+		os.exit( 1 )
+	end
+end
+
 ---	Launch Premake to generate the project files.
-local function GenerateProjectFiles( tget, options, args, shouldUsePremake4 )
+local function GenerateProjectFiles( tget, options, args )
 	if type( tget ) ~= "string" then
 		error( "bad argument #1 to GenerateProjectFiles. (Expected string but received "..type( tget )..")" )
 	end
@@ -177,29 +211,17 @@ local function GenerateProjectFiles( tget, options, args, shouldUsePremake4 )
 		error( "bad argument #2 to GenerateProjectFiles. (Expected string but received "..type( args )..")" )
 	end
 
-	local premakeRet = -1
 	local suffix = ""
 	if IsWindows() then
 		suffix = ".exe"
 	end
-	if shouldUsePremake4 then
-		local premakeCmd = "premake4" .. suffix .. " " .. options .. " " .. tget .. " " .. args
-		print( premakeCmd ); io.stdout:flush()
-		premakeRet = os.execute( premakeCmd )
-	else
-		local premakeCmd = "premake" .. suffix .. " --target " .. tget .. " " .. options .. " " .. args
-		print( premakeCmd ); io.stdout:flush()
-		premakeRet = os.execute( premakeCmd )
-	end
-
-	if premakeRet ~= 0 then
-		print( string.format( "Premake error (%i) occured. Converted exit code to 1", premakeRet ) ); io.stdout:flush()
-		os.exit( 1 )
-	end
+	
+	ExecuteCommand( "premake4" .. suffix .. " " .. options .. " " .. tget .. " " .. args )
+	
 	print( "" ); io.stdout:flush()
 end
 
-local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles )
+local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles, platform )
 	-- Check parameters
 	if type( cfg ) ~= "string" then
 		error( "bad argument #1 to ExecuteGnuBuilder. (Expected string but received "..type( cfg )..")" )
@@ -208,194 +230,165 @@ local function ExecuteGnuBuilder( cfg, shouldClean, premake4makefiles )
 
 	print( "Make Builder invoked." ); io.stdout:flush()
 
-	-- Launch make to build
 	local make = "make"
 	if IsWindows() then
-		make = "mingw32-make"
+		make = GccRoot() .. "\\mingwvars.bat /k && mingw32-make"
 	end
 
-	local configLabel = "CONFIG"
-	if premake4makefiles then
-		configLabel = "config"
-		cfg = string.lower( cfg )
+	cfg = string.lower( cfg )
+	if platform then
+		cfg = cfg .. platform:sub( 2 )
 	end
 
 	-- Launch make to clean
 	if shouldClean then
-		local cleanCmd = string.format( "%s %s=%s clean", make, configLabel, cfg )
-		print( cleanCmd ); io.stdout:flush()
-		local makeRet = os.execute( cleanCmd )
-		if makeRet ~= 0 then
-			print( string.format( "Make clean error (%i) occured. Converted exit code to 1", makeRet ) ); io.stdout:flush()
-			os.exit( 1 )
-		end
+		ExecuteCommand( string.format( "%s config=%s clean", make, cfg ) )		
 	end
 
 	-- Launch make to build
-	local makeCmd = string.format( "%s %s=%s", make, configLabel, cfg )
-	print( makeCmd ); io.stdout:flush()
-	local makeRet = os.execute( makeCmd )
-	if makeRet ~= 0 then
-		print( string.format( "Make error (%i) occured. Converted exit code to 1", makeRet ) ); io.stdout:flush()
-		os.exit( 1 )
-	end
+	ExecuteCommand( string.format( "%s config=%s", make, cfg ) )	
 end
 
-local function ExecuteGmakeBuilder( cfg, shouldClean )
-	ExecuteGnuBuilder( cfg, shouldClean, true )
+local function ExecuteGmakeBuilder( cfg, shouldClean, platform )
+	ExecuteGnuBuilder( cfg, shouldClean, true, platform )
 end
 
-local function ExecuteVs2005Builder( cfg, shouldClean )
-	-- Check parameters
-	if type( cfg ) ~= "string" then
-		error( "bad argument #1 to ExecuteVs2005Builder. (Expected string but received "..type( cfg )..")" )
-	end
-	shouldClean = shouldClean or false
+local function ShouldUseMSBuild( year )
+	return tonumber( year ) >= 2010
+end
 
-	print( "VS2005 Builder invoked." ); io.stdout:flush()
-
-	-- Determine Visual Studio path
-	local vsPath = os.getenv( "VS80COMNTOOLS" ).."..\\IDE\\devenv.com"
-	print( vsPath ); io.stdout:flush()
-
-	if not FileExists( vsPath ) then
-		vsPath = os.getenv( "VS80COMNTOOLS" ).."..\\IDE\\VCExpress.com"
-		-- Make sure that exists
-		if not FileExists( vsPath ) then
-			error( "Microsoft Visual C++ 2005 (8.0) is not installed on this machine." )
+local function GetRegistryEntry( keyName, valueName )
+	regValue = assert( io.popen( [[reg query "]] .. keyName .. [[" /v "]] .. valueName ..[["]] ) )
+	  
+	local value
+	for line in regValue:lines() do
+		value = line:match( valueName .. "%s+REG_[%u_]+%s+(.+)" )
+		if value then
+			break
 		end
 	end
 
-	-- Find solution file
+	regValue:close()
+	
+	return value
+end
+
+local function GetMSBuildPath()
+	local msBuildPath = os.getenv( "PROGRAMFILES" ) .. [[\MSBuild\12.0\bin\MSBuild.exe]]
+	if path.exists( msBuildPath ) then
+		return msBuildPath
+	end
+	
+	local registryPath = [[HKLM\software\wow6432node\microsoft\visualstudio\sxs\vc7]]
+	local rootPath = GetRegistryEntry( registryPath, "FrameworkDir32" )
+	if not rootPath then
+		registryPath = [[HKLM\software\microsoft\visualstudio\sxs\vc7]]
+		rootPath = GetRegistryEntry( registryPath, "FrameworkDir32" )
+	end
+	
+	if not rootPath then
+		error( "Unable to locate MSBuild path in the registry" )
+	end
+	
+	local version = GetRegistryEntry( registryPath, "FrameworkVer32" )
+	if not version then
+		error( "Unable to locate MSBuild version in the registry" )
+	end
+	
+	return rootPath .. version .. [[\MSBuild.exe]]
+end
+
+local function FindVsRunner( solutionFile, cfg, platform, year, version )	
+	local vsEnv = os.getenv( "VS" .. version .. "0COMNTOOLS" )
+	if not vsEnv then
+		error( "Microsoft Visual C++ " .. year .. " (" .. version .. ".0) is not installed on this machine." )
+	end
+
+	local runner = 	{
+						path = "",
+						cleanCmdFormat = "",
+						buildCmdFormat = ""
+					}
+					
+	if ShouldUseMSBuild( year ) then
+		runner.path = GetMSBuildPath()
+		local baseCmd = string.format( '"%s" "%s" /verbosity:normal /property:Configuration=%s;_IsNativeEnvironment=false', runner.path, solutionFile, cfg )
+		if platform then
+			baseCmd = baseCmd .. ";Platform=" .. platform .. ""
+		end
+		runner.cleanCmd = '"' .. baseCmd .. ' /target:Clean"'
+		runner.buildCmd = '"' .. baseCmd .. '"'
+	else		
+		runner.path = vsEnv .. [[..\IDE\devenv.com]]
+		
+		if not FileExists( runner.path ) then
+			runner.path = vsEnv .. [[..\IDE\VCExpress.com]]
+		end
+		
+		if not FileExists( runner.path ) then
+			error ( "Neither devenv.com nor VCExpress.com were found in " .. vsEnv .. [[..\IDE\]] )
+		end
+		
+		if platform then
+			cfg = cfg .. "|" .. platform
+		end
+		
+		runner.cleanCmd = string.format( '""%s" "%s" /clean "%s""', runner.path, solutionFile, cfg )
+		runner.buildCmd = string.format( '""%s" "%s" /build "%s""', runner.path, solutionFile, cfg )
+	end
+		
+	print( "VS Runner: " .. runner.path ); io.stdout:flush()
+	
+	return runner
+end
+
+local function FindSolutionFile()
 	local solutionFile = FindFirstFile( ".", ".sln" )
 	if not solutionFile then
-		error( "No VS2005 solution file found. Make sure the project files are generated." )
+		error( "No Visual Studio solution file found. Make sure the project files are generated." )
 	end
 	print( "Using solution "..solutionFile ); io.stdout:flush()
-
-	-- Launch vc to clean
-	if shouldClean then
-		print( "Cleaning solution..." ); io.stdout:flush()
-		local cleanCmd = string.format( '""%s" "%s" /clean %s"', vsPath, solutionFile, cfg )
-		local vsRet = os.execute( cleanCmd )
-		--print( "VS2005 clean process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
-		if vsRet ~= 0 then
-			print( string.format( "VS2005 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
-			os.exit( 1 )
-		end
-	end
-
-	-- Launch vc to build
-	print( "Building solution..." ); io.stdout:flush()
-	local buildCmd = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
-	local vsRet = os.execute( buildCmd )
-	--print( "VS2005 build process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
-	if vsRet ~= 0 then
-		print( string.format( "VS2005 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
-		os.exit( 1 )
-	end
+	return solutionFile
 end
 
-local function ExecuteVs2008Builder( cfg, shouldClean )
-	-- Check parameters
+local function ExecuteVsBuilder( cfg, shouldClean, platform, year, version )
+	
+	print( "VS" .. year .. " Builder invoked." ); io.stdout:flush()
+	
 	if type( cfg ) ~= "string" then
-		error( "bad argument #1 to ExecuteVs2008Builder. (Expected string but received "..type( cfg )..")" )
-	end
-	shouldClean = shouldClean or false
-
-	print( "VS2008 Builder invoked." ); io.stdout:flush()
-
-	-- Determine Visual Studio path
-	local vsPath = os.getenv( "VS90COMNTOOLS" ).."..\\IDE\\devenv.com"
-	print( vsPath ); io.stdout:flush()
-	if not FileExists( vsPath ) then
-		vsPath = os.getenv( "VS90COMNTOOLS" ).."..\\IDE\\VCExpress.com"
-		-- Make sure that exists
-		if not FileExists( vsPath ) then
-			error( "Microsoft Visual C++ 2008 (9.0) is not installed on this machine." )
-		end
+		error( "bad argument #1 to ExecuteVs" .. year .. "Builder. (Expected string but received "..type( cfg )..")" )
 	end
 
-	-- Find solution file
-	local solutionFile = FindFirstFile( ".", ".sln" )
-	if not solutionFile then
-		error( "No VS2008 solution file found. Make sure the project files are generated." )
-	end
-	print( "Using solution "..solutionFile ); io.stdout:flush()
+	local runner = FindVsRunner( FindSolutionFile(), cfg, platform, year, version )
 
-	-- Launch vc to clean
 	if shouldClean then
-		print( "Cleaning solution..." ); io.stdout:flush()
-		local cleanCmd = string.format( '""%s" "%s" /clean %s"', vsPath, solutionFile, cfg )
-		local vsRet = os.execute( cleanCmd )
-		--print( "VS2008 clean process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
-		if vsRet ~= 0 then
-			print( string.format( "VS2008 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
-			os.exit( 1 )
-		end
+		print( "Cleaning solution..." ); io.stdout:flush()	
+		ExecuteCommand( runner.cleanCmd )
 	end
 
-	-- Launch vc to build
 	print( "Building solution..." ); io.stdout:flush()
-	local buildString = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg )
-	local vsRet = os.execute( buildString )
-	--print( "VS2008 build process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
-	if vsRet ~= 0 then
-		print( string.format( "VS2008 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
-		os.exit( 1 )
-	end
+	ExecuteCommand( runner.buildCmd )
 end
 
-local function ExecuteVs2010Builder( cfg, shouldClean )
-	-- Check parameters
-	if type( cfg ) ~= "string" then
-		error( "bad argument #1 to ExecuteVs2010Builder. (Expected string but received "..type( cfg )..")" )
-	end
-	shouldClean = shouldClean or false
-
-	print( "VS2010 Builder invoked." ); io.stdout:flush()
-
-	-- Determine Visual Studio path
-	local vsPath = os.getenv( "VS100COMNTOOLS" ).."..\\IDE\\devenv.com"
-	print( vsPath ); io.stdout:flush()
-	if not FileExists( vsPath ) then
-		vsPath = os.getenv( "VS100COMNTOOLS" ).."..\\IDE\\VCExpress.com"
-		-- Make sure that exists
-		if not FileExists( vsPath ) then
-			error( "Microsoft Visual C++ 2010 (10.0) is not installed on this machine." )
-		end
-	end
-
-	-- Find solution file
-	local solutionFile = FindFirstFile( ".", ".sln" )
-	if not solutionFile then
-		error( "No VS2010 solution file found. Make sure the project files are generated." )
-	end
-	print( "Using solution "..solutionFile ); io.stdout:flush()
-
-	-- Launch vc to clean
-	if shouldClean then
-		print( "Cleaning solution..." ); io.stdout:flush()
-		local cleanCmd = string.format( '""%s" "%s" /clean %s"', vsPath, solutionFile, cfg )
-		local vsRet = os.execute( cleanCmd )
-		--print( "VS2010 clean process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
-		if vsRet ~= 0 then
-			print( string.format( "VS2010 clean error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
-			os.exit( 1 )
-		end
-	end
-
-	-- Launch vc to build
-	print( "Building solution..." ); io.stdout:flush()
-	local buildString = string.format( '""%s" "%s" /build %s"', vsPath, solutionFile, cfg ); io.stdout:flush()
-	local vsRet = os.execute( buildString )
-	--print( "VS2010 build process exited with code "..( vsRet or "<nil>" ) ); io.stdout:flush()
-	if vsRet ~= 0 then
-		print( string.format( "VS2010 build error (%i) occured. Converted exit code to 1", vcRet or -1 ) ); io.stdout:flush()
-		os.exit( 1 )
-	end
+local function ExecuteVs2005Builder( cfg, shouldClean, platform )
+	ExecuteVsBuilder( cfg, shouldClean, platform, "2005", "8" )
 end
 
+local function ExecuteVs2008Builder( cfg, shouldClean, platform )
+	ExecuteVsBuilder( cfg, shouldClean, platform, "2008", "9" )
+end
+
+local function ExecuteVs2010Builder( cfg, shouldClean, platform )
+	ExecuteVsBuilder( cfg, shouldClean, platform, "2010", "10" )
+end
+
+local function ExecuteVs2012Builder( cfg, shouldClean, platform )
+	ExecuteVsBuilder( cfg, shouldClean, platform, "2012", "11" )
+end
+
+local function ExecuteVs2013Builder( cfg, shouldClean, platform )
+	ExecuteVsBuilder( cfg, shouldClean, platform, "2013", "12" )
+end
 
 local function ExecuteINNOBuilder( file, shouldClean )
 	print( "INNO Setup Installer Builder invoked." ); io.stdout:flush()
@@ -468,6 +461,7 @@ local function ExecuteNSISBuilder( file )
 	local installerCmd = ""
 	if IsWindows() then
 		installerCmd = string.format( [["C:\Program Files\NSIS\makensis.exe" /V2 %q]], file )
+		
 		print( installerCmd ); io.stdout:flush()
 
 		local installerRet = os.execute( installerCmd )
@@ -486,41 +480,14 @@ local function ExecuteNSISBuilder( file )
 	lfs.chdir( curDir )
 end
 
-local function ExecuteGPack( cmdLine )
-	print( "ExecuteGPack invoked." ); io.stdout:flush()
-
-	-- Create default cmd line args for packager.lua if the caller didn't specify them
-	if nil == cmdLine then
-		if nil == TARGET then
-			error( "TARGET is not expected to be nil during ExecuteGPack " )
-		end
-
-		-- Poco is expected to be installed in order for packager to run the bundle.exe tool
-		local pocoBase = os.getenv( "POCO_BASE" )
-
-		-- Default location of bundle spec files, bundle output dir is the current dir
-		cmdLine = "-b ./bundlespecs -p "..pocoBase.." -o ./ -c "..TARGET
-	else
-		if type( cmdLine ) ~= "string" then
-			error( "bad argument #1 to ExecuteGPack. (Expected string but received "..type( file )..")" )
-		end
-	end
-
-	-- Build the packager.lua command line
-	cmdLine = "lua.exe ./build/packager.lua "..cmdLine
-
-	-- Invoke packager.lua which will create bundles and deploy them to the bundle repository
-	print( cmdLine ); io.stdout:flush()
-	local cmdRet = os.execute( cmdLine )
-	print( "Packager exited with code "..( cmdRet or "<nil>" ) ); io.stdout:flush()
-end
-
 Targets =
 {
   gnu = ExecuteGnuBuilder,
   vs2005 = ExecuteVs2005Builder,
   vs2008 = ExecuteVs2008Builder,
   vs2010 = ExecuteVs2010Builder,
+  vs2012 = ExecuteVs2012Builder,
+  vs2013 = ExecuteVs2013Builder,
   gmake = ExecuteGmakeBuilder
 }
 
@@ -528,22 +495,22 @@ Installers =
 {
   inno = ExecuteINNOBuilder,
   nsis = ExecuteNSISBuilder,
-  gpack = ExecuteGPack,
 }
 
 function main()
 	local args = lapp [[
 	Builds the current project. Run from the root level.
 
-	-t,--target         (string)            One of the following: vs2005, vs2008, vs2010, gnu, or gmake.
+	-t,--target         (string)            One of the following: vs2005, vs2008, vs2010, vs2012, gnu, or gmake.
 	-b,--build          (default Release)   Project-specific build configuration, usually Debug or Release.
 	-i,--installer      (default none)      One of the following: inno or nsis.
 	-f,--installerfile  (default none)      The installer source file to pass to the installer, if needed.
 	-p,--premake        (default none)      Extra options passed on to premake.
 	-m,--teamcity       (default true)      Enable teamcity output.
 	-c,--clean                              Clean project sources before building.
-	-q,--premake4                           Use premake4
+	-q,--premake4                           Use premake4 (deprecated, only premake4 is supported)
 	-s,--saveinstallers                     Save any previous installers in the install directory
+	-a,--platform       (default none)      Platform to build
 	]]
 
 	-- Setup the build configuration
@@ -573,24 +540,13 @@ function main()
 
 	local premakeArgs = ""
 	if args.teamcity and args.teamcity ~= "false" then
-		if args.premake4 then
-			--premakeArgs = "teamcity"
-			premakeOptions = premakeOptions .. " --teamcity"
-		else
-			premakeArgs = "--teamcity"
-		end
+		premakeOptions = premakeOptions .. " --teamcity"
 	end
 
-	if "gpack" == installer then
-		-- Force the mscvrt fix
-		premakeOptions = "--reshack-msvcrt-manifest "..premakeOptions
-
-		-- Generate premake scripts for managing dependencies
-		if args.premake4 then
-			ExecuteGPack( "-g premake4 -b ./bundlespecs -o ./build -c "..args.target )
-		else
-			ExecuteGPack( "-g premake3 -b ./bundlespecs -o ./build -c "..args.target )
-		end
+	if args.platform and args.platform ~= "none" then
+		premakeOptions = premakeOptions .. " --platform=" .. args.platform
+	else
+		args.platform = nil
 	end
 
 	-- Generate the project files
@@ -600,14 +556,14 @@ function main()
 			error( "Invalid target: " .. TARGET )
 		end
 
-		if ( "gnu" == TARGET ) and args.premake4 then
+		if ( "gnu" == TARGET ) then
 			TARGET = "gmake"
 		end
 
-		GenerateProjectFiles( TARGET, premakeOptions, premakeArgs, args.premake4 )
+		GenerateProjectFiles( TARGET, premakeOptions, premakeArgs )
 
 		-- Actually build project
-		Targets[ TARGET ]( build, shouldClean )
+		Targets[ TARGET ]( build, shouldClean, args.platform )
 	end
 
 	-- Optionally build the installer

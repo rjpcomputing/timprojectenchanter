@@ -17,12 +17,6 @@ newoption
 
 newoption
 {
-	trigger = "boost-single-threaded",
-	description = "Link against Boost using a single threaded runtime"
-}
-
-newoption
-{
 	trigger = "boost-link-debug",
 	description = "Link against the debug version in Debug configuration. Normally you link against the release version no matter the configuration."
 }
@@ -39,15 +33,22 @@ newoption
 	description = "Override copying the debug libraries in the CopyDynamicLibraries method"
 }
 
+
+if not os.is( "windows" ) then
+	EnableOption( "boost-shared" )
+end
+
 -- Namespace
 boost = {}
-boost.numeric_version = 1.40
-boost.version = "1_40" -- default boost version
+boost.numeric_version = 1.50
+boost.version = "1_50" -- default boost version
 
 --	The version of GCC that you are building for.
 --		Make sure that you leave the '.' out of the string. (i.e. "44" not "4.4")
 --		Defaults to "44" on Windows and "44" on Linux.
-boost.gcc_version = "44"
+if ActionUsesGCC() then
+	boost.gcc_version = presets.GetGccVersion()
+end
 
 if "windows" == os.get() then
 	boost.root = os.getenv( "BOOST_ROOT" )
@@ -89,6 +90,10 @@ function boost.GetToolsetName()
 		toolsetName = "vc90"
 	elseif _ACTION == "vs2010" then
 		toolsetName = "vc100"
+	elseif _ACTION == "vs2012" then
+		toolsetName = "vc110"
+	elseif _ACTION == "vs2013" then
+		toolsetName = "vc120"
 	elseif ActionUsesGCC() then
 		if "windows" == os.get() then
 			toolsetName = "mgw"..boost.gcc_version
@@ -122,9 +127,9 @@ function boost.LibName( libraryName, isDebug )
 	--print( "Toolset: ", toolset )
 
 	-- Threading
-	local threading = "-mt"
-	if _OPTIONS["boost-single-threaded"] then
-		threading = ""
+	local threading = ""
+	if os.is( "windows" ) or os.is("macosx") then
+		threading = "-mt"
 	end
 	--print( "Threading: ", threading )
 
@@ -147,7 +152,7 @@ function boost.LibName( libraryName, isDebug )
 
 	-- Boost version
 	local boostVerSuffix = ""
-	if (not os.is("linux")) and (_OPTIONS["boost-shared"] or boost.numeric_version >= 1.45) then
+	if (not (os.is("linux") or os.is("macosx")) ) and (_OPTIONS["boost-shared"] or boost.numeric_version >= 1.45) then
 		if boost.version ~= "" then
 			boostVerSuffix = "-" .. boost.version
 		end
@@ -159,8 +164,18 @@ function boost.LibName( libraryName, isDebug )
 	return name
 end
 
-function boost.LinkStaticLibFullPath( libraryName, isDebug )
-	linkoptions( "-l:" .. boost.root .. "/lib/lib" .. boost.LibName( libraryName, isDebug ) .. ".a" )
+function boost.LinkStaticLib( libraryName, isDebug )
+	local libDir = "lib"
+	if "x64" == presets.platform then
+		libDir = "lib64"
+	end
+
+	local namespec = ":lib" .. boost.LibName( libraryName, isDebug ) .. ".a"
+	if _ACTION == "codelite"  then
+		linkoptions( "-l" .. namespec )
+	else
+		links( namespec )
+	end
 end
 
 function boost.LinkLibName( libraryName, isDebug )
@@ -176,14 +191,19 @@ function boost.LinkSharedLibExceptRegex( libraryName, isDebug )
 	]]
 
 	if "regex" == libraryName then
-		links { boost.LibName( libraryName, true ) }
+		boost.LinkStaticLib( libraryName, isDebug )
 	else
 		local libprefix = ""
 		if boost.numeric_version >= 1.45 then
 			libprefix = "lib"
 		end
 		-- force linking to the dll
-		linkoptions { "-l:" .. libprefix .. boost.LibName( libraryName, true ) .. ".dll" }
+		local namespec = ":" .. libprefix .. boost.LibName( libraryName, true ) .. ".dll"
+		if _ACTION == "codelite"  then
+			linkoptions( "-l" .. namespec )
+		else
+			links( namespec )
+		end
 	end
 end
 
@@ -216,7 +236,6 @@ end
 --
 --	Options supported:
 --		boost-shared - "Link against Boost as a shared library"
---		boost-single-threaded - "Link against Boost using a single threaded runtime"
 --		dynamic-runtime - "Use the dynamicly loadable version of the runtime."
 --		unicode - "Use the Unicode character set."
 --		using-stlport - "Use the STLPort standard library rather than
@@ -251,6 +270,14 @@ function boost.Configure( libsToLink, gccVer, boostVer )
 		defines { "BOOST_ALL_DYN_LINK" }
 	end
 
+	-- Enable threadsafe access in the Spirits library
+	defines { "BOOST_SPIRIT_THREADSAFE" }
+
+	if ActionUsesGCC() and not os.is("macosx") then
+		-- Correct issues with c++11, BOOST_NO_SCOPED_ENUMS is deprecated as of Boost 1.51. It has been replaced by BOOST_NO_CXX11_SCOPED_ENUMS
+		defines { "BOOST_NO_SCOPED_ENUMS", "BOOST_NO_CXX11_SCOPED_ENUMS" }
+	end
+
 	-- Set Boost libraries to link.
 	if os.is( "windows" ) then
 		AddSystemPath( boost.root )
@@ -258,18 +285,22 @@ function boost.Configure( libsToLink, gccVer, boostVer )
 		--(the following line prevents in boost: socket_types.hpp(27) : fatal error C1189: #error :  WinSock.h has already been included)
 		defines { "WIN32_LEAN_AND_MEAN" }
 
-		if ActionUsesMSVC() then
-			libdirs { boost.root .. "/lib" }
-		else 
+		if not ActionUsesMSVC() then
 			-- Only add link libraries if not VC.
 			if _OPTIONS["boost-shared"] then
-				libdirs { boost.root .. "/lib" }
 				boost.AddLinks( libsToLink, boost.LinkSharedLibExceptRegex )
 			else
 				defines( "BOOST_THREAD_USE_LIB" ) -- vc is LIB by default, mingw needs this
-				boost.AddLinks( libsToLink, boost.LinkStaticLibFullPath )
+				boost.AddLinks( libsToLink, boost.LinkStaticLib )
 			end
 		end
+		
+		configuration "x64"
+			libdirs { boost.root .. "/lib64" }
+		configuration "not x64"
+			libdirs { boost.root .. "/lib" }
+		configuration(cfg.terms)
+		
 	else
 		boost.AddLinks( libsToLink, boost.LinkLibName )
 	end

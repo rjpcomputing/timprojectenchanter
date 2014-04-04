@@ -8,12 +8,6 @@
 -- ----------------------------------------------------------------------------
 
 -- Package options
---newoption
---{
-	--trigger = "with-boost-shared",
-	--description = "Link against Boost as a shared library"
---}
-
 newoption
 {
 	trigger = "maxtesttime",
@@ -80,7 +74,7 @@ end
 
 --[[This function returns a deep copy of a given table.
 	The function below also copies the metatable to the new table if there is one,
-	so the behaviour of the copied table is the same as the original. ]]
+	so the behaviour of the copied table is the same as the original.
 local function deepcopy(object)
     local lookup_table = {}
     local function _copy(object)
@@ -99,6 +93,7 @@ local function deepcopy(object)
     end
     return _copy(object)
 end
+--]]
 
 local function DoUnitTestSetup( inputFiles, inputExcludes )
 	local unitTestDir = "unittest++"
@@ -110,8 +105,9 @@ local function DoUnitTestSetup( inputFiles, inputExcludes )
 
 	files { inputFiles, unitTestDir .. "/main.cpp" }
 	excludes { inputExcludes }
-	includedirs { unitTestDir, unitTestDir .. "/src" }
-	
+	AddSystemPath( unitTestDir )
+	AddSystemPath( unitTestDir .. "/src" )
+
 	local kindVal = presets.GetCustomValue( "kind" )
 	if kindVal ~= "StaticLib" then
 		links { "UnitTest++" }
@@ -127,8 +123,10 @@ local function DoMockTestSetup()
 		mockDir = "../"..mockDir
 	end
 
-	includedirs { mockDir .. "/gtest/include", mockDir .. "/include", mockdir }
-	
+	AddSystemPath( mockDir .. "/gtest/include" )
+	AddSystemPath( mockDir .. "/include" )
+	AddSystemPath( mockDir )
+
 	local kindVal = presets.GetCustomValue( "kind" )
 	if kindVal ~= "StaticLib" then
 		links { "GoogleMock", "GoogleTest" }
@@ -140,13 +138,11 @@ end
 
 ---	Call this To configure your package to be .
 --	@param pkg Premake 'package' passed in that gets all the settings manipulated.
-function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock, withLog4CPlus )
+function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock, withLog4CPlus, workingDirectory )
 	inputFiles = inputFiles or {}
 	assert( type( inputFiles ) == "table", "unittest.Configure( Param2:inputFiles ) type missmatch, should be a table." )
 	inputExcludes = inputExcludes or {}
 	assert( type( inputExcludes ) == "table", "unittest.Configure( Param3:inputExcludes ) type missmatch, should be a table." )
-
-	--mock = mock or false
 
 	unittest.projectUnderTest = project()
 	unittest.projectUnderTestKind = presets.GetCustomValue( "kind" )
@@ -261,33 +257,61 @@ function unittest.Configure( setupFunction, inputFiles, inputExcludes, mock, wit
 		-- Do mock test packages so it does not have to be called elsewhere
 		if mock then
 			DoMockTestSetup()
+			if _ACTION == "vs2012" then
+				defines( "_VARIADIC_MAX=10" )
+			end
+		end
+
+		local setWorkingDirectory = ""
+		if workingDirectory then
+			setWorkingDirectory = "cd " .. workingDirectory .. " && "
 		end
 
 		configuration( { "Debug", "x32 or native" } )
 			local projectTargetDir = SolutionTargetDir( false ) or solution().basedir .. "/bin"
+
+			if gpack and gpack.invoked then
+				projectTargetDir = solution().basedir .. '/' .. "Debug.cache"
+			end
+
 			targetsuffix("")
 			targetdir( projectTargetDir )
 			targetname( pkgName .. "d-tests" )
-			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix}
+			postbuildcommands { setWorkingDirectory .. '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix}
 
 		configuration( { "Release", "x32 or native" } )
 			local projectTargetDir = SolutionTargetDir( false ) or solution().basedir .. "/bin"
+
+			if gpack and gpack.invoked then
+				projectTargetDir = solution().basedir .. '/' .. "Release.cache"
+			end
+
 			targetname( pkgName .. "-tests" )
 			targetdir( projectTargetDir )
-			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix }
+			postbuildcommands { setWorkingDirectory .. '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix }
 
 		configuration( { "Debug", "x64" } )
 			local projectTargetDir = SolutionTargetDir( false ) or solution().basedir .. "/bin64"
+
+			if gpack and gpack.invoked then
+				projectTargetDir = solution().basedir .. '/' .. "Debug.cache"
+			end
+
 			targetsuffix("")
 			targetdir( projectTargetDir )
-			targetname( pkgName .. "d64-tests" )
-			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix}
+			targetname( pkgName .. "d-tests" )
+			postbuildcommands { setWorkingDirectory .. '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix}
 
 		configuration( { "Release", "x64" } )
 			local projectTargetDir = SolutionTargetDir( false ) or solution().basedir .. "/bin64"
-			targetname( pkgName .. "64-tests" )
+
+			if gpack and gpack.invoked then
+				projectTargetDir = solution().basedir .. '/' .. "Release.cache"
+			end
+
+			targetname( pkgName .. "-tests" )
 			targetdir( projectTargetDir )
-			postbuildcommands { '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix }
+			postbuildcommands { setWorkingDirectory .. '"' .. projectTargetDir .. pathSeparator .. targetname() .. '"' .. teamCitySuffix .. maxTestTimeSuffix }
 
 		configuration( {} )
 

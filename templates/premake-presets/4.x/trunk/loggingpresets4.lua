@@ -44,10 +44,6 @@ function logging.Configure( includePath )
 		end
 	end
 
-	if os.is( "linux" ) and kindVal ~= "StaticLib" then
-		links( "rt" )
-	end
-
 	if ( kindVal ~= "StaticLib" ) then
 		links "Log4CPlus"
 	end

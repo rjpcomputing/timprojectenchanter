@@ -28,8 +28,10 @@
 --		- call Configure() after your project is setup, not before.
 -- ----------------------------------------------------------------------------
 
--- OPTIONS -------------------------------------------------------------------
---
+presets = {}
+
+dofile( "sha1.lua" )
+
 newoption
 {
    trigger     = "dynamic-runtime",
@@ -76,12 +78,6 @@ end
 
 newoption
 {
-	trigger     = "win-vs2005-vs2008-no-stdint-use-boost-types",
-	description	= "Windows VS2005 or VS2008 only: Use boost types to define stdint.h size-specific types."
-}
-
-newoption
-{
 	trigger		= "with-gprof",
 	description	= "Enable information to be added for profiling by gprof"
 }
@@ -98,17 +94,17 @@ newoption
 	description	= "Enable trace statements"
 }
 
+newoption
+{
+	trigger = "platform-toolset",
+	description = "Allow for specifying the MSVC platform  (vs2013_xp, clang, etc)"
+}
+
 if os.is("linux") then
 	newoption
 	{
 		trigger		= "rpath",
 		description	= "Linux only, set rpath on the linker line to find shared libraries next to executable"
-	}
-
-	newoption
-	{
-		trigger		= "soname",
-		description	= "Linux only, set soname on the linker line"
 	}
 end
 
@@ -130,10 +126,19 @@ newoption
 	description = "Supplied when invoked by TeamCity"
 }
 
-presets = {}
+presets.cpp11Option = "c++11"
+newoption
+{
+    trigger = presets.cpp11Option,
+    description = "Enable C++11 compliler support where available"
+}
+
+-- use the "platform" option to specify a platform, instead of add a platform
+presets.platform = _OPTIONS["platform"]
+_OPTIONS["platform"] = nil -- premake 4.4 beta 4 rejects the option when "Native" is not in solution().platforms
 
 -- the version of the windows API for the _WIN32_WINNT macro, and others like it
-presets.WindowsAPIVersion = "0x0500"
+presets.WindowsAPIVersion = "0x0501"
 
 ---	Change an option to be enabled by default.
 --	@param name The name of the option to enable
@@ -152,8 +157,60 @@ function DisableOption( name )
 	_OPTIONS[name] = nil
 end
 
-if _OPTIONS["shared-libraries"] then
+if _OPTIONS["shared-libraries"] or not os.is( "windows" ) then
 	EnableOption( "dynamic-runtime" )
+end
+
+function presets.GccRoot()
+	if not os.is("windows") then
+		return ""
+	end
+
+	local gccRoot = os.getenv( "GCC_ROOT" )
+	if not gccRoot then
+		gccRoot = "C:\\MinGW4"
+	end
+	if not os.isdir( gccRoot ) then
+		error( "No valid GCC installed at'" .. gccRoot .. "', make sure the environment variable 'GCC_ROOT' points to a valid GCC installation" )
+	end
+	return gccRoot
+end
+
+function presets.GccBinDir()
+	if not os.is("windows") then
+		return ""
+	end
+
+	return presets.GccRoot() .. "\\bin\\"
+end
+
+function presets.GetGccVersion()
+	local cmdline = presets.GccBinDir() .. "gcc --version"
+	local file = assert( io.popen( cmdline ))
+	local output = file:read( '*all' )
+	file:close()
+
+	local major, minor, build = output:match( "(%d+).(%d+).(%d+)" )
+	return major .. minor
+end
+
+function ActionUsesGCC()
+	return ("gmake" == _ACTION or "codelite" == _ACTION or "codeblocks" == _ACTION or (_ACTION and _ACTION:find("xcode")))
+end
+
+function ActionUsesMSVC()
+	return (_ACTION and _ACTION:find("vs"))
+end
+
+if ActionUsesGCC() then
+	local success, result = pcall( presets.GetGccVersion )
+	if success then
+		if tonumber( result ) >= 47 then
+			EnableOption( "c++11" )
+		end
+	else
+		print( "Unable to detect gcc version: " .. result )
+	end
 end
 
 ---	Configures a target with  a set of this pre-configuration.
@@ -240,7 +297,12 @@ function presets.GetCustomValue( item )
 	return nil
 end
 
+presets.arm = "arm"
+
 function Configure()
+	if presets.platform and ( presets.platform:lower() ~= presets.arm ) then
+		solution().platforms = { presets.platform }
+	end
 
 	cfg = configuration()
 
@@ -287,15 +349,52 @@ function Configure()
 				links		 ( { "gomp", "pthread" } )
 			end
 			linkoptions	 ( "-fopenmp" )
-
-			if not ompCopied then
-				WindowsCopy( "C:\\MinGW4\\lib\\gcc\\mingw32\\bin\\libgomp-1.dll", SolutionTargetDir() )
-				WindowsCopy( "C:\\MinGW4\\bin\\pthreadGC2.dll", SolutionTargetDir() )
-				ompCopied = true
-			end
 		elseif ActionUsesMSVC() then
 			buildoptions ( "/openmp" )
 		end
+	end
+
+	if _OPTIONS["with-gprof"] then
+                print( "Using gprof for this build..." )
+		if ActionUsesGCC() then
+			-- Add profiling information
+                        buildoptions( "-pg" )
+                        linkoptions( "-pg" )
+		else
+			error( "gprof can only be used with gcc" )
+		end
+	end
+
+	if _OPTIONS["with-gcov"] then
+		if ActionUsesGCC() then
+			-- Add coverage information
+			configuration( "Debug" )
+				buildoptions( { "-fprofile-arcs", "-ftest-coverage" } )
+				if kindVal ~= "StaticLib" then
+					links( "gcov" )
+				end
+		else
+			error( "gcov can only be used with gcc" )
+		end
+	end
+
+    if presets.platform and presets.platform:lower() == presets.arm then
+        buildoptions { "-march=armv7-a", "-mtune=cortex-a8", "-mfpu=neon" }
+        premake.gcc.cc  = "arm-linux-gnueabihf-gcc"
+        premake.gcc.cxx = "arm-linux-gnueabihf-g++"
+        premake.gcc.ar = "arm-linux-gnueabihf-ar"
+    end
+
+	--Generate a UUID based on the name of the project using a SHA1 library we stole.
+	--This will keep the startup project set correctly and eliminate the duplicate object file warnings.
+
+	--UUIDs should take the form of:
+	--1CC8B072-8F3C-C94A-8A9D-EB4F221CCFE9
+	if ActionUsesMSVC() then
+		local genUUID = sha1.hex( project().name  ):upper()
+		local myUUID = genUUID:sub( 1,8) .. "-" .. genUUID:sub( 9,12) .. "-" .. genUUID:sub( 13,16) .. "-" .. genUUID:sub( 17,20) .. "-" .. genUUID:sub( 21, 32 )
+		--print( myUUID)
+		uuid( myUUID )
 	end
 
 	-- targetdir, implibdir, and libdirs defaults --------------------------------------
@@ -304,7 +403,9 @@ function Configure()
 			if "StaticLib" == kindVal then
 				targetdir( solution().basedir .. "/lib" )
 			else
-				targetdir( solution().basedir .. "/bin" )
+				if nil == gpack or (gpack and not gpack.invoked) then
+					targetdir( solution().basedir .. "/bin" )
+				end
 			end
 		end
 		if nil == next( SolutionLibDirs( false ) ) then
@@ -315,6 +416,12 @@ function Configure()
 		]]
 		--if os.is( "windows" ) or ( os.is( "linux" ) and not os.is64bit() ) then
 		if os.is( "windows" ) then
+			if ActionUsesGCC() then
+				buildoptions( "-m32" )
+				linkoptions( "-m32" )
+				resoptions( "-F pe-i386" )
+			end
+
 			if not ( kindVal == "StaticLib" ) then
 				if _OPTIONS[ "large-address-aware" ] or _OPTIONS["large-address-aware"] == "yes" then
 					if ActionUsesGCC() then
@@ -333,7 +440,9 @@ function Configure()
 			if "StaticLib" == kindVal then
 				targetdir( solution().basedir .. "/lib64" )
 			else
-				targetdir( solution().basedir .. "/bin64" )
+				if nil == gpack or (gpack and not gpack.invoked) then
+					targetdir( solution().basedir .. "/bin64" )
+				end
 			end
 		end
 		if nil == next( SolutionLibDirs( false ) ) then
@@ -341,6 +450,13 @@ function Configure()
 		end
 		if os.get() == "windows" then
 			defines( { "_WIN64" } )
+		end
+		if ActionUsesMSVC() then
+			buildoptions( "/bigobj" )
+		end
+		if ActionUsesGCC() then
+			buildoptions( "-m64" )
+			linkoptions( "-m64" )
 		end
 
 	configuration( "not dynamic-runtime" )
@@ -364,9 +480,8 @@ function Configure()
 
 	-- COMPILER SPECIFIC SETUP ----------------------------------------------------
 	--
-	configuration( "gmake or codelite or codeblocks or xcode3" )
+	configuration( "gmake or codelite or codeblocks or xcode*" )
 		buildoptions( { "-Wno-unknown-pragmas", "-Wno-deprecated", "-fno-strict-aliasing" } )
-		linkoptions( { "-Wl,-E" } )
 		if os.get() == "windows" then
 			linkoptions( { "-Wl,--enable-auto-import" } )
 			flags( "NoImportLib" )
@@ -382,11 +497,52 @@ function Configure()
 			linkoptions( "-m32" )
 		end
 
-	if os.is( "linux" ) then
-		if kindVal ~= "StaticLib" then
-			linkoptions( "-lrt" )
-		end
+		buildoptions{ "-Werror=address" } -- Make "comparison with string literal results in unspecified behavior" an error
 
+	configuration( "vs*" )
+		flags( { "SEH", "No64BitChecks" } )
+		defines( { "_CRT_SECURE_NO_DEPRECATE", "_SCL_SECURE_NO_WARNINGS", "_CRT_NONSTDC_NO_DEPRECATE" } )
+		buildoptions
+		{
+			"/we 4150",
+			"/wd 4503", -- disable warning: "decorated name length exceeded, name was truncated"
+			"/we 4130", -- Make "logical operation on address of string constant" an error
+		}
+
+	configuration( { "vs*", "release-with-debug-symbols", "Release", "not StaticLib" } )
+		linkoptions "/DEBUG"
+
+        configuration( { "release-with-debug-symbols", "Release" } )
+		flags( "Symbols" )
+
+	configuration( "vs*", "not vs2005" )
+		-- multi-process building
+		flags( "NoMinimalRebuild" )
+		buildoptions( "/MP" )
+
+    -- OPERATING SYSTEM SPECIFIC SETTINGS -----------------------------------------
+	--
+	configuration( "macosx" )
+        AddSystemPath( "/usr/local/include" )
+        libdirs( "/usr/local/lib" )
+        buildoptions("-ftemplate-depth=900")
+
+	configuration( "windows" )
+		-- Maybe add "*.manifest" later, but it seems to get in the way.
+		files( "*.rc" )
+		defines( { "_WIN32", "WIN32", "_WINDOWS", "NOMINMAX", "_WIN32_WINNT=" .. presets.WindowsAPIVersion, "WINVER=" .. presets.WindowsAPIVersion } )
+
+	configuration( { "windows", "not StaticLib" } )
+		links( { "psapi", "ws2_32", "version", "winmm" } )
+
+	configuration( { "linux", "not StaticLib" } )
+		links( { "pthread", "dl", "m", "rt" } )
+
+	configuration( { "linux", "StaticLib" } )
+		-- lib is only needed because Premake automatically adds the -fPIC to dlls
+		buildoptions( "-fPIC" )
+
+	configuration( "linux" )
 		-- Set rpath
 		local useRpath = true
 		local rpath="$$``ORIGIN"
@@ -404,105 +560,8 @@ function Configure()
 			linkoptions( "-Wl,-rpath," .. rpath )
 		end
 
-		-- Set soname
-		local useSoname = true
-		local function BuildSoname()
-			local soname =
-			{
-				targetname	= presets.GetCustomValue( "targetname" ),
-				extension	= presets.GetCustomValue( "targetextension" ),
-				prefix		= presets.GetCustomValue( "targetprefix" ),
-				suffix		= presets.GetCustomValue( "targetsuffix" ),
-			}
-			local ret = ""
-			if soname.prefix then ret = ret .. soname.prefix end
-			if soname.targetname then ret = ret .. soname.targetname end
-			if soname.suffix then ret = ret .. soname.suffix end
-			if soname.extension then ret = ret .. "." .. soname.extension end
-
-			return ret
-		end
-
-		local soname = BuildSoname()
-		local sonameOption = _OPTIONS[ "soname" ]
-
-		if sonameOption then
-			if "no" == sonameOption or "" == sonameOption then
-				useSoname = false
-			else
-				soname = sonameOption
-			end
-		end
-
-		if useSoname then
-			linkoptions( "-Wl,-soname," .. soname )
-		end
-	end
-
-	configuration( "vs*" )
-		flags( { "SEH", "No64BitChecks" } )
-		defines( { "_CRT_SECURE_NO_DEPRECATE", "_SCL_SECURE_NO_WARNINGS", "_CRT_NONSTDC_NO_DEPRECATE" } )
-		buildoptions( "/we 4150" )
-
-	configuration( { "vs*", "release-with-debug-symbols", "Release", "not StaticLib" } )
-		linkoptions "/DEBUG"
-
-	configuration( "vs2008 or vs2010" )
-		-- multi-process building
-		flags( "NoMinimalRebuild" )
-		buildoptions( "/MP" )
-
-	-- OPERATING SYSTEM SPECIFIC SETTINGS -----------------------------------------
-	--
-	configuration( "windows" )
-		-- Maybe add "*.manifest" later, but it seems to get in the way.
-		files( "*.rc" )
-		defines( { "_WIN32", "WIN32", "_WINDOWS", "NOMINMAX", "_WIN32_WINNT=" .. presets.WindowsAPIVersion, "WINVER=" .. presets.WindowsAPIVersion } )
-
-		if _OPTIONS["win-vs2005-vs2008-no-stdint-use-boost-types"] then
-			defines "WIN_VS2005_VS2008_NO_STDINT_USE_BOOST_TYPES"
-
-			local boostRoot = os.getenv( "BOOST_ROOT" )
-			if boostRoot then
-				includedirs( boostRoot )
-			end
-		end
-
-	configuration( { "windows", "not StaticLib" } )
-		links( { "psapi", "ws2_32", "version", "winmm" } )
-
-	configuration( { "linux", "not StaticLib" } )
-		links( { "pthread", "dl", "m" } )
-
-	configuration( { "linux", "StaticLib" } )
-		-- lib is only needed because Premake automatically adds the -fPIC to dlls
-		buildoptions( "-fPIC" )
-
-	if _OPTIONS["with-gprof"] then
-		if ActionUsesGCC() then
-			-- Add profiling information
-			configuration( "Debug" )
-				buildoptions( "-pg" )
-				linkoptions( "-pg" )
-		else
-			error( "gprof can only be used with gcc" )
-		end
-	end
-
-	if _OPTIONS["with-gcov"] then
-		if ActionUsesGCC() then
-			-- Add coverage information
-			configuration( "Debug" )
-				buildoptions( { "-fprofile-arcs", "-ftest-coverage" } )
-				if kindVal ~= "StaticLib" then
-					links( "gcov" )
-				end
-		else
-			error( "gcov can only be used with gcc" )
-		end
-	end
-
 	configuration(cfg.terms)
+
 
 end
 
@@ -563,41 +622,24 @@ function ConfigureLibrary( libName, includePath, sharedOptionName, usingDllDefin
 	if includePath then
 		AddIncludeDirWithValidation( includePath )
 	else
-		if unittest and unittest.projectUnderTestKind then
-			kindVal = unittest.projectUnderTestKind
-		end
-
-		presets.Trace( "Configuring " .. libName .. " for " .. project().name .. ", when " .. project().name .. " is a " .. kindVal )
+		presets.Trace( "Configuring " .. libName .. " for " .. project().name )
 
 		local upPath = "../" .. libName
 		local downPath = libName
 
-		if ( kindVal == "StaticLib" ) then
-			AddIncludeDirWithValidation( upPath )
-		elseif ( kindVal == "SharedLib" ) then
-			local hasUpPath, upPath = pcall( CheckDirOrLowercaseDir, upPath )
-			local hasDownPath, downPath = pcall( CheckDirOrLowercaseDir, downPath )
-			if hasDownPath then
-				AddIncludeDirWithValidation( downPath )
-			elseif hasUpPath then
-				AddIncludeDirWithValidation( upPath )
-			else
-				error( "ConfigureLibrary( " .. libName .. " ): The additional include directory cannot be determined because '" .. upPath .. "' and '" .. downPath .. "'", 3 )
-			end
-		else
+		local hasUpPath, upPath = pcall( CheckDirOrLowercaseDir, upPath )
+		local hasDownPath, downPath = pcall( CheckDirOrLowercaseDir, downPath )
+		if hasDownPath then
 			AddIncludeDirWithValidation( downPath )
+		elseif hasUpPath then
+			AddIncludeDirWithValidation( upPath )
+		else
+			error( "ConfigureLibrary( " .. libName .. " ): The additional include directory cannot be determined because '" .. upPath .. "' and '" .. downPath .. "'", 3 )
 		end
 	end
 
 	if _OPTIONS[ sharedOptionName or ( string.lower( libName ) .. "-shared" ) ] then
 		defines( usingDllDefine or ( string.upper( libName ) .. "_USING_DLL" ) )
-	end
-
-	if os.is( "windows" ) then
-		if _OPTIONS["win-vs2005-vs2008-no-stdint-use-boost-types"] then
-			defines "WIN_VS2005_VS2008_NO_STDINT_USE_BOOST_TYPES"
-			AddIncludeDirWithValidation( os.getenv( "BOOST_ROOT" ) )
-		end
 	end
 end
 
@@ -606,7 +648,7 @@ function AddSystemPath( path )
 	if type(path) ~= "string" then
 		error( "AddSystemPath only accepts a string", 2 )
 	end
-	if ("codelite" == _ACTION) or ("codeblocks" == _ACTION) or ("xcode3" == _ACTION) then
+	if ("codelite" == _ACTION) or ("codeblocks" == _ACTION) or (_ACTION and _ACTION:find("xcode")) then
 		buildoptions( "-isystem " .. path )
 	elseif ("gmake" == _ACTION) then
 		buildoptions( "-isystem \"" .. path .. "\"" )
@@ -748,6 +790,18 @@ function SolutionTargetDir( setError )
 	end
 end
 
+function SolutionObjDir( setError )
+	setError = setError or false
+	local sln = solution()
+	if ( sln.blocks[1] and sln.blocks[1].objdir ) then
+		return solution().blocks[1].objdir
+	end
+
+	if setError then
+		error( "objdir has not been set on the solution", 2 )
+	end
+end
+
 function SolutionImpLibDir( setError )
 	setError = setError or false
 	local sln = solution()
@@ -770,14 +824,6 @@ function SolutionLibDirs( setError )
 	if setError then
 		error( "libdirs has not been set on the solution", 2 )
 	end
-end
-
-function ActionUsesGCC()
-	return ("gmake" == _ACTION or "codelite" == _ACTION or "codeblocks" == _ACTION or "xcode3" == _ACTION)
-end
-
-function ActionUsesMSVC()
-	return (_ACTION and _ACTION:find("vs"))
 end
 
 function presets.CopyFile( sourcePath, destinationDirectory )
@@ -833,49 +879,77 @@ end
 -- Copy the redist runtime dlls
 function CopyCRT( destinationDirectory, copyDebugCRT, copy64Bit )
 
-	copyDebugCRT = copyDebugCRT or false
-	copy64Bit = copy64Bit or false
+	if nil == copy64Bit then
+		copy64Bit = ( "x64" == presets.platform )
+	end
 
 	if ( os.get() == "windows" ) then
 		local sourcePath = ""
-		if ( _ACTION ) then
-			if ( _ACTION:find( "vs20" ) ) then
-				local vsdir = ""
-				local vcname = ""
-				local arch = "x86"
-				if copy64Bit then
-					arch = "x64"
-				end
+		if ActionUsesMSVC() then
+			local vsdir = ""
+			local vcname = ""
+			local arch = "x86"
+			if copy64Bit then
+				arch = "x64"
+			end
 
-				if _ACTION == "vs2005" then
-					vsdir = "Microsoft Visual Studio 8"
-					vcname = "VC80"
-				elseif _ACTION == "vs2008" then
-					vsdir = "Microsoft Visual Studio 9.0"
-					vcname = "VC90"
-				elseif _ACTION == "vs2010" then
-					vsdir = "Microsoft Visual Studio 10.0"
-					vcname = "VC100"
-				end
+			if _ACTION == "vs2005" then
+				vsdir = "Microsoft Visual Studio 8"
+				vcname = "VC80"
+			elseif _ACTION == "vs2008" then
+				vsdir = "Microsoft Visual Studio 9.0"
+				vcname = "VC90"
+			elseif _ACTION == "vs2010" then
+				vsdir = "Microsoft Visual Studio 10.0"
+				vcname = "VC100"
+			elseif _ACTION == "vs2012" then
+				vsdir = "Microsoft Visual Studio 11.0"
+				vcname = "VC110"
+			elseif _ACTION == "vs2013" then
+				vsdir = "Microsoft Visual Studio 12.0"
+				vcname = "VC120"
+			end
 
-				local libsToCopy = {}
-				local programFiles = os.getenv( "ProgramFiles" )
-				if copyDebugCRT then
-					libsToCopy = os.matchfiles(programFiles  .. '/' .. vsdir .. '/VC/redist/Debug_NonRedist/'..arch..'/Microsoft.' .. vcname .. '.DebugCRT/*' )
-				else
-					local crtPath = programFiles .. '/' .. vsdir .. '/VC/redist/'..arch..'/Microsoft.' .. vcname .. '.CRT/*'
-					libsToCopy = os.matchfiles(crtPath)
-					print ( "found " .. #libsToCopy .. " crt files to copy from " .. crtPath )
-				end
-				for _, lib in ipairs( libsToCopy ) do
-					WindowsCopy( lib, destinationDirectory )
-				end
+			local libsToCopy = {}
+			local programFiles = os.getenv( "ProgramFiles" )
+			if copyDebugCRT then
+				libsToCopy = os.matchfiles(programFiles  .. '/' .. vsdir .. '/VC/redist/Debug_NonRedist/'..arch..'/Microsoft.' .. vcname .. '.DebugCRT/*' )
 			else
-				sourcePath = "C:/MinGW4/bin/mingwm10.dll"
-				WindowsCopy( sourcePath, destinationDirectory )
+				local crtPath = programFiles .. '/' .. vsdir .. '/VC/redist/'..arch..'/Microsoft.' .. vcname .. '.CRT/*'
+				libsToCopy = os.matchfiles(crtPath)
+				print ( "found " .. #libsToCopy .. " crt files to copy from " .. crtPath )
+			end
+			if _OPTIONS["openmp"] then
+				local ompPath = programFiles .. '/' .. vsdir .. '/VC/redist/'..arch..'/Microsoft.' .. vcname .. '.OPENMP/*'
+				local ompLibs = {}
+				ompLibs = os.matchfiles(ompPath)
+				for _, lib in ipairs( ompLibs ) do
+					table.insert( libsToCopy, lib )
+				end
+			end
+			for _, lib in ipairs( libsToCopy ) do
+				WindowsCopy( lib, destinationDirectory )
+			end
+		elseif ActionUsesGCC() then
+			local gccBin = presets.GccBinDir()
+			local gccVersionBefore48 = tonumber( presets.GetGccVersion() ) < 48
+			if gccVersionBefore48 then
+				WindowsCopy( gccBin .. "mingwm10.dll", destinationDirectory )
+				WindowsCopy( gccBin .. "libgcc_s_dw2-1.dll", destinationDirectory )
+			end
 
-				sourcePath = "C:/MinGW4/bin/libgcc_s_dw2-1.dll"
-				WindowsCopy( sourcePath, destinationDirectory )
+			if _OPTIONS["openmp"] then
+
+				if gccVersionBefore48 then
+					WindowsCopy( presets.GccRoot() .. "\\lib\\gcc\\mingw32\\bin\\libgomp-1.dll", SolutionTargetDir() )
+					WindowsCopy( gccBin .. "pthreadGC2.dll", SolutionTargetDir() )
+				else
+					if copy64Bit then
+						WindowsCopy( gccBin .. "libgomp_64-1.dll", SolutionTargetDir() )
+					else
+						WindowsCopy( gccBin .. "libgomp-1.dll", SolutionTargetDir() )
+					end
+				end
 			end
 		end
 	end
@@ -931,5 +1005,159 @@ end
 function presets.Trace( ... )
 	if _OPTIONS["with-trace"] then
 		print( ... ); io.stdout:flush()
+	end
+end
+
+---
+-- return true if platform will be included in the generated solution
+--
+function presets.SolutionHasPlatform( platform )
+	return (platform == presets.platform) or (solution().platforms and table.contains( solution().platforms, platform ))
+end
+
+-- hack to make the visual studio version selector work with vs2012 express
+function VS2012ExpressHeader(sln)
+	_p('Microsoft Visual Studio Solution File, Format Version 12.00')
+	_p('# Visual Studio Express 2012 for Windows Desktop')
+end
+
+if (_ACTION == "vs2012")  and os.isfile( os.getenv("VS110COMNTOOLS") .. "..\\IDE\\WDExpress.exe" ) then
+	assert( premake.vstudio.sln2005.header )
+	premake.vstudio.sln2005.header = VS2012ExpressHeader
+end
+
+-- hack to inject the soname for gcc shared libraries
+local premakesGccGetLdFlags = premake.gcc.getldflags
+function GccLdFlagsWithSoName( cfg )
+	local ldflags = premakesGccGetLdFlags( cfg )
+
+	if cfg.kind == "SharedLib" then
+		table.insert( ldflags, "-Wl,-soname," .. cfg.linktarget.name ) -- the '.1' should be the major version of the shared library being produced. need a way to pass it in, but it will probably be a built in feature of premake, someday.
+	end
+
+	return ldflags
+end
+
+-- hacks to set flags for just cpp files
+local premakesGccGetCxxFlags = premake.gcc.getcxxflags
+function GccCxxFlags( cfg )
+	local cxxflags = premakesGccGetCxxFlags( cfg )
+	if _OPTIONS[ presets.cpp11Option ] then
+		table.insert( cxxflags, "-std=c++11" )
+	end
+	return cxxflags
+end
+
+if ActionUsesGCC() then
+	premake.gcc.getldflags = GccLdFlagsWithSoName
+	premake.gcc.getcxxflags = GccCxxFlags
+end
+
+if ( ActionUsesMSVC() and _OPTIONS["platform-toolset"] and premake.vstudio and premake.vstudio.vc2010 ) then
+	--enable vs2013_xp target
+	local original_vs2010ConfigurationPropertyGroup = premake.vstudio.vc2010.configurationPropertyGroup
+	function myVS2010ConfigurationPropertyGroup( cfg, cfginfo )
+		local old_p = _p
+		_p = function( indent, text, ... )
+
+
+			if ( text == '<PlatformToolset>%s</PlatformToolset>' ) then
+				old_p( indent, text, _OPTIONS["platform-toolset"] )
+			else
+				old_p( indent, text, ... )
+			end
+		end
+		original_vs2010ConfigurationPropertyGroup( cfg, cfginfo )
+		_p = old_p
+	end
+
+    premake.vstudio.vc2010.configurationPropertyGroup = myVS2010ConfigurationPropertyGroup
+end
+
+local premakesXcodePrintList = premake.xcode.printlist
+function XcodeCxxFlags( list, tag )
+    premakesXcodePrintList( list, tag )
+    if 'OTHER_CFLAGS' == tag then
+        if _OPTIONS[ presets.cpp11Option ] then
+            _p(4,'CLANG_CXX_LANGUAGE_STANDARD = "c++0x";')
+        end
+    end
+end
+
+local premakesXcodePBXProject = premake.xcode.PBXProject
+function XcodeLastUpgradeCheck( tr )
+    local old_p = _p
+    _p = function( indent, text, ... )
+        old_p( indent, text, ... )
+
+        if ( text == 'isa = PBXProject;' ) then
+            old_p( indent, 'attributes = {' )
+            old_p( indent + 1,'LastUpgradeCheck = 0500;')
+            old_p( indent,'};')
+        end
+    end
+    premakesXcodePBXProject( tr )
+    _p = old_p
+end
+
+if (_ACTION and _ACTION:find("xcode") ) then
+    premake.xcode.printlist = XcodeCxxFlags
+    premake.xcode.PBXProject = XcodeLastUpgradeCheck
+end
+
+function presets.VerifyDllVersion( envPath, relPathToDLL, strName )
+
+--check for the right version of VS libs
+	-- the libs don't have any truly identifying info, but the dlls do.
+	-- call dumpbin -headers on that dll, and parse out linker version
+	if _ACTION:find( "vs" ) then
+		local dllPath = envPath .. relPathToDLL
+		local dumpBinPath = "../../VC/bin/dumpbin.exe"
+		local vscomntools = nil
+		local expectedVersion = "0"
+		if _ACTION == "vs2005" then
+			vscomntools = os.getenv( "VS80COMNTOOLS" )
+			expectedVersion = "8.00"
+		elseif _ACTION == "vs2008" then
+			vscomntools = os.getenv( "VS90COMNTOOLS" )
+			expectedVersion = "8.00"	-- Legacy wx workaround
+		elseif _ACTION == "vs2010" then
+			vscomntools = os.getenv( "VS100COMNTOOLS" )
+			expectedVersion = "10.00"
+		elseif _ACTION == "vs2012" then
+			vscomntools = os.getenv( "VS110COMNTOOLS" )
+			expectedVersion = "11.00"
+		elseif _ACTION == "vs2013" then
+			vscomntools = os.getenv( "VS120COMNTOOLS" )
+			expectedVersion = "12.00"
+		end
+
+		if vscomntools then
+			--this commandline has to execute dumpbin -headers inside an environment setup by vwvars32.bat.
+			--the generated path should look something like:
+			--cmd.exe /C ""C:\Program Files (x86)\Microsoft Visual Studio 9.0\Common7\Tools\vsvars32.bat" && "C:\Program Files (x86)\Microsoft Visual Studio 9.0\Common7\Tools\../../VC/bin/dumpbin.exe" -headers E:\SourceCode\Libraries\wxWidgets2.8.11.03/lib/vc_dll/wxbase28_net_vc.dll"
+
+			local cmdline = "cmd.exe /C \"\"" .. vscomntools .. "vsvars32.bat\" && \"" .. vscomntools .. dumpBinPath .. "\" -headers \"" .. dllPath .. "\" 2>&1\""
+			local file = assert( io.popen( cmdline ))
+			local output = file:read( '*all' )
+			file:close()
+			local strStart, strEnd, match = string.find( output, "(%d+.%d+)%slinker version" )
+			if match == nil then
+				print (cmdline)
+				print( output )
+				print( strStart )
+				print( strEnd )
+				print( match )
+				print ( string.sub( output, strStart, strEnd ) )
+
+				error ("error getting linker version from VS tools:  Cannot verify " .. strName .. " libs" )
+			end
+
+			if match ~= expectedVersion then
+				error( strName .. " directory does not appear to contain libraries compatible with " .. _ACTION .. ".  " .. "\n linker version: " .. match .. "\n $" .. strName .. ":" .. envPath  )
+			end
+		else
+			print ("unable to find VS tools.  Cannot verify " .. strName .. " libs" )
+		end
 	end
 end

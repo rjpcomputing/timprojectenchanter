@@ -14,89 +14,145 @@ newoption
 	description = "Link against wxWidgets as a shared library"
 }
 
--- Namespace
-wx = {}
+local function GetVersion()
+	if os.is("windows") then
+		local path = path.translate( path.join( path.translate( wx.root, "/" ), path.translate( "include/wx/version.h", "/" ) ) )
+		local versionFile = io.open( path, "r" )
 
-function VerifyWxDlls( envPath, relPathToDLL, strName ) 
---check for the right version of VS libs
-	-- the libs don't have any truly identifying info, but the dlls do.
-	-- call dumpbin -headers on that dll, and parse out linker version
-	if _ACTION == "vs2005" or _ACTION == "vs2008" or _ACTION == "vs2010" then
-		local dllPath = envPath .. relPathToDLL
-		local dumpBinPath = "../../VC/bin/dumpbin.exe"
-		local vscomntools = ""
-		local expectedVersion = "0"
-		if _ACTION == "vs2005" then
-			vscomntools = os.getenv( "VS80COMNTOOLS" )
-			expectedVersion = "8.00"
-		elseif _ACTION == "vs2008" then
-			vscomntools = os.getenv( "VS90COMNTOOLS" )
-			expectedVersion = "8.00"	--yes, 8.0  2005 libs work with 2008.
-		elseif _ACTION == "vs2010" then
-			vscomntools = os.getenv( "VS100COMNTOOLS" )
-			expectedVersion = "10.00"
+		if not versionFile then
+			error( "Unable to open " .. path .. " for reading the Wx version - check the value of WXWIN (" .. wx.root .. ")" )
 		end
-		
-		if vscomntools then
-			--this commandline has to execute dumpbin -headers inside an environment setup by vwvars32.bat.
-			--the generated path should look something like:
-			--cmd.exe /C ""C:\Program Files (x86)\Microsoft Visual Studio 9.0\Common7\Tools\vsvars32.bat" && "C:\Program Files (x86)\Microsoft Visual Studio 9.0\Common7\Tools\../../VC/bin/dumpbin.exe" -headers E:\SourceCode\Libraries\wxWidgets2.8.11.03/lib/vc_dll/wxbase28_net_vc.dll"
 
-			local cmdline = "cmd.exe /C \"\"" .. vscomntools .. "vsvars32.bat\" && \""  .. vscomntools .. dumpBinPath .. "\"" .. " -headers " .. dllPath  .. "\""
-			--print (cmdline)
-			local file = assert( io.popen( cmdline ))
-			local output = file:read( '*all' )
-			--print( output )
-			file:close()
-			local strStart, strEnd, match = string.find( output, "(%d+.%d+)%slinker version" )
-			if match == nil then
-				print ("error getting linker version from VS tools:  Cannot verify " .. strName .. " libs" )
+		local versionMajor = nil
+		local versionMinor = nil
+		local versionRelease = nil
+
+		for line in versionFile:lines() do
+			versionMajor = versionMajor or line:match( "#define%s+wxMAJOR_VERSION%s+(%d+)" )
+			versionMinor = versionMinor or line:match( "#define%s+wxMINOR_VERSION%s+(%d+)" )
+			versionRelease = versionRelease or line:match( "#define%s+wxRELEASE_NUMBER%s+(%d+)" )
+			if versionMajor and versionMinor and versionRelease then
+				return versionMajor .. versionMinor
 			end
-			--print( strStart )
-			--print( strEnd )
-			--print( match )
-			--print ( string.sub( output, strStart, strEnd ) )
-				
-			if match ~= expectedVersion then
-				error( strName .. " directory does not appear to contain libraries compatible with " .. _ACTION .. ".  " .. "\n linker version: " .. match .. "\n $" .. strName .. ":" .. envPath  )
-			end
-		else
-			print ("unable to find VS tools.  Cannot verify " .. strName .. " libs" )
 		end
+
+		local errorMessage = "Unable to find these in " .. path .. ":"
+		if not versionMajor then
+			errorMessage = errorMessage .. " wxMAJOR_VERSION"
+		end
+		if not versionMinor then
+			errorMessage = errorMessage .. " wxMINOR_VERSION"
+		end
+		if not versionRelease then
+			errorMessage = errorMessage .. " wxRELEASE_NUMBER"
+		end
+		error( errorMessage )
+	elseif os.is( "linux" ) or os.is( "macosx" ) then
+		local cmdline = "wx-config --release"
+		local file = assert( io.popen( cmdline ))
+		local output = file:read( '*all' )
+		file:close()
+
+		local major, minor = output:match( "(%d+).(%d+)" )
+		return major .. minor
+	else
+		error( "This operating system is not currently supported for automatic detection of wxWidgets version" )
 	end
 end
 
+local function ProcessBacktickCmd( cmd )
+	local file = assert( io.popen( cmd ))
+	local output = file:read( '*all' )
+	file:close()
+	return output
+end
 
+local function ProcessLinks( debug )
+	if not os.is( "macosx" ) then
+		local cmd = "wx-config --debug=" .. iif( debug, "yes", "no" ) .. " --libs gl, stc, propgrid, aui, std"
+		local output = ProcessBacktickCmd( cmd )
+		local staticLib = "StaticLib" == presets.GetCustomValue( "kind" )
 
-if "windows" == os.get() then
+		for i in string.gmatch(output, "%S+") do
+			if 1 == i:find( "-l" ) then
+				if not staticLib then
+					links{ i:sub( 3 ) }
+				end
+			else
+				linkoptions{ i }
+			end
+		end
+	else
+		local cmd = "wx-config --debug=" .. iif( debug, "yes", "no" ) .. " --libs" -- Is this correct? DOes it need gl, stc, propgrid, aui, std?
+		local output = ProcessBacktickCmd( cmd )
+		linkoptions{ output }
+	end
+end
+
+local function ProcessBuildOptions( debug )
+	local cmd = "wx-config --debug=" .. iif( debug, "yes", "no" ) .. " --cflags"
+	local output = ProcessBacktickCmd( cmd )
+
+	for i in string.gmatch(output, "%S+") do
+		buildoptions{ i }
+	end
+end
+
+local function UseUnicode()
+	return _OPTIONS["unicode"] or ( 30 <= tonumber( wx.version ) )
+end
+
+-- Namespace
+wx = {}
+wx.hasCopiedDlls = false
+wx.hasCopiedAdditionsDlls = false
+wx.compilerVersion = ""
+wx.version = ""
+
+if os.is("windows") then
 	wx.root = os.getenv( "WXWIN" )
 	if not wx.root then
 		error( "missing the WXWIN environment variable" )
 	end
-	
-	--check for headers existing.
-	local f =io.open( wx.root .. "/include/wx/wx.h" )
-	if f==nil then
-		error( "can't find include/wx/wx.h! - check the value of WXWIN (" .. wx.root .. ")" )
+end
+
+wx.version = GetVersion()
+
+if os.is("windows") then
+	if 30 <= tonumber( wx.version ) then
+		if ActionUsesMSVC() then
+			if _ACTION == "vs2005" then
+				wx.compilerVersion = "80"
+			elseif _ACTION == "vs2008" then
+				wx.compilerVersion = "90"
+			elseif _ACTION == "vs2010" then
+				wx.compilerVersion = "100"
+			elseif _ACTION == "vs2012" then
+				wx.compilerVersion = "110"
+			elseif _ACTION == "vs2013" then
+				wx.compilerVersion = "120"
+			else
+				error( "Unsupported version of Visual Studio" )
+			end
+		elseif ActionUsesGCC()then
+			wx.compilerVersion = presets.GetGccVersion()
+		end
 	end
-	
-	
-	VerifyWxDlls( wx.root, "/lib/vc_dll/wxbase28_net_vc.dll", "WXWIN" )
-	
-	
+
+	if tonumber( wx.version ) <= 28 then
+		presets.VerifyDllVersion( wx.root, "/lib/vc" .. wx.compilerVersion .. "_dll/wxbase" .. wx.version .. "_net_vc" .. wx.compilerVersion .. ".dll", "WXWIN" )
+	end
 end
 
 ---	Configure a C/C++ package to use wxWidgets
---	wx.Configure( package, shouldSetTarget = true, wxVer = "28" )
-function wx.Configure( shouldSetTarget, wxVer, copyDlls )
-	-- Set the default values.
-	if shouldSetTarget == nil then shouldSetTarget = true end
-	local targetName = project().name
-	local wx_ver = wxVer or "28"
-
+function wx.Configure()
 	-- Set the defines.
-	if _OPTIONS["unicode"] then
+	local useUnicode = UseUnicode()
+	if useUnicode then
 		defines { "wxUSE_UNICODE" }
+		if not _OPTIONS["unicode"] then
+			defines { "UNICODE_DEFINED_BY_WX" }
+		end
 	end
 	defines "__WX__"
 
@@ -108,259 +164,119 @@ function wx.Configure( shouldSetTarget, wxVer, copyDlls )
 		defines { "WXUSINGDLL" }
 	end
 
-	if _ACTION == "vs2005" or _ACTION == "vs2008" or _ACTION == "vs2010" then
-		--linkoptions { "/MANIFEST:NO" }
-		defines { "wxUSE_NO_MANIFEST=1" } -- Not needed in wxWidgets 2.8.8.
+	if ActionUsesMSVC() then
+		defines { "wxUSE_NO_MANIFEST=1" }
 	end
 
-	local kindVal = presets.GetCustomValue( "kind" ) or ""
-
-	if "windows" == os.get() then
-		-- ******* WINDOWS SETUP ***********
-		-- *	Settings that are Windows specific.
-		-- *********************************
-
-		-- Set wxWidgets include paths
-		if _ACTION == "cb-gcc" then
-			-- Needed for the resource complier.
-			includedirs { "$(#WX.include)" }
-			buildoptions { "-isystem $(#WX.include)" }
-		elseif _ACTION == "cl-gcc" then
-			-- Needed for the resource complier.
-			includedirs { wx.root .. "/include" }
-			buildoptions { "-isystem " .. wx.root .. "/include" }
-		elseif _ACTION == "gmake" then
-			-- Needed for the resource complier.
-			includedirs { wx.root .. "/include" }
-			buildoptions { "-isystem \"" .. wx.root .. "/include\"" }
-		else
-			includedirs { wx.root .. "/include" }
+	if os.is( "windows" ) then
+		if ActionUsesGCC() then
+			includedirs { wx.root .. "/include" } -- Needed for the resource complier.
 		end
 
-		-- Set the correct 'setup.h' include path.
-		if _OPTIONS["unicode"] then
-			if _ACTION == "codeblocks" then
-				if _OPTIONS["wx-shared"] then
-					configuration "Debug"
-						includedirs { "$(#WX.lib)/gcc_dll/mswud" }
-					configuration "Release"
-						includedirs { "$(#WX.lib)/gcc_dll/mswu" }
-				else
-					configuration "Debug"
-						includedirs { "$(#WX.lib)/gcc_lib/mswud" }
-					configuration "Release"
-						includedirs { "$(#WX.lib)/gcc_lib/mswu" }
-				end
-			elseif ActionUsesGCC() then
-				if _OPTIONS["wx-shared"] then
-					configuration "Debug"
-						includedirs { wx.root .. "/lib/gcc_dll/mswud" }
-					configuration "Release"
-						includedirs { wx.root .. "/lib/gcc_dll/mswu" }
-				else
-					configuration "Debug"
-						includedirs { wx.root .. "/lib/gcc_lib/mswud" }
-					configuration "Release"
-						includedirs { wx.root .. "/lib/gcc_lib/mswu" }
-				end
-			else
-				if _OPTIONS["wx-shared"] then
-					configuration "Debug"
-						includedirs { wx.root .. "/lib/vc_dll/mswud" }
-					configuration "Release"
-						includedirs { wx.root .. "/lib/vc_dll/mswu" }
-				else
-					configuration "Debug"
-						includedirs { wx.root .. "/lib/vc_lib/mswud" }
-					configuration "Release"
-						includedirs { wx.root .. "/lib/vc_lib/mswu" }
-				end
-			end
-		else
-			if _ACTION == "codeblocks" then
-				if _OPTIONS["wx-shared"] then
-					configuration "Debug"
-						includedirs { "$(#WX.lib)/gcc_dll/mswd" }
-					configuration "Release"
-						includedirs { "$(#WX.lib)/gcc_dll/msw" }
-				else
-					configuration "Debug"
-						includedirs { "$(#WX.lib)/gcc_lib/mswd" }
-					configuration "Release"
-						includedirs { "$(#WX.lib)/gcc_lib/msw" }
-				end
-			elseif ActionUsesGCC() then
-				if _OPTIONS["wx-shared"] then
-					configuration "Debug"
-						includedirs { wx.root .. "/lib/gcc_dll/mswd" }
-					configuration "Release"
-						includedirs { wx.root .. "/lib/gcc_dll/msw" }
-				else
-					configuration "Debug"
-						includedirs { wx.root .. "/lib/gcc_lib/mswd" }
-					configuration "Release"
-						includedirs { wx.root .. "/lib/gcc_lib/msw" }
-				end
-			else
-				if _OPTIONS["wx-shared"] then
-					configuration "Debug"
-						includedirs { wx.root .. "/lib/vc_dll/mswd" }
-					configuration "Release"
-						includedirs { wx.root .. "/lib/vc_dll/msw" }
-				else
-					configuration "Debug"
-						includedirs { wx.root .. "/lib/vc_lib/mswd" }
-					configuration "Release"
-						includedirs { wx.root .. "/lib/vc_lib/msw" }
-				end
-			end
-		end
-		configuration( {} )
+		AddSystemPath( wx.root .. "/include" )
 
-		-- Set the linker options.
-		local winWxRuntimePath = wx.root .. "\\lib\\gcc_dll\\"
+		local toolchain = iif( ActionUsesGCC(), "gcc", "vc" ) .. wx.compilerVersion
+		local linktype = iif( _OPTIONS["wx-shared"], "dll", "lib" )
+		local unicodeSuffix = iif( useUnicode, "u", "" )
+		local rootPrefix = iif( _ACTION == "codeblocks", "$(#WX.lib)", wx.root .. "/lib" )
 
-		if _ACTION == "codeblocks" then
-			if _OPTIONS["wx-shared"] then
-				libdirs { "$(#WX.lib)/gcc_dll" }
-			else
-				libdirs { "$(#WX.lib)/gcc_lib" }
-			end
-		elseif ActionUsesGCC() then
-			if _OPTIONS["wx-shared"] then
-				libdirs { wx.root .. "/lib/gcc_dll" }
-			else
-				libdirs { wx.root .. "/lib/gcc_lib" }
-			end
-		else
-			winWxRuntimePath = wx.root .. "\\lib\\vc_dll\\"
-			if _OPTIONS["wx-shared"] then
-				libdirs { wx.root .. "/lib/vc_dll" }
-			else
-				libdirs { wx.root .. "/lib/vc_lib" }
-			end
-		end
-		local winLibs =
-		{
-			"wsock32", "comctl32", "psapi", "ws2_32", "opengl32",
-			"ole32", "winmm", "oleaut32", "odbc32", "advapi32",
-			"oleaut32", "uuid", "rpcrt4", "gdi32", "comdlg32",
-			"winspool", "shell32", "kernel32"
-		}
-		if ActionUsesMSVC() then
-			table.insert( winLibs, { "gdiplus" } )
-		end
+		local setupHincludeDir = rootPrefix .. "/" .. toolchain .. "_" .. linktype .. "/msw" .. unicodeSuffix
+		local setupHincludeDir64 = setupHincludeDir:gsub( "/lib", "/lib64" )
+		local libDir = rootPrefix .. "/" .. toolchain .. "_" .. linktype
+		local libDir64 = libDir:gsub( "/lib", "/lib64" )
+
+		configuration { "Debug", "not x64" }
+			AddSystemPath( setupHincludeDir .. "d" )
+
+		configuration { "Release", "not x64" }
+			AddSystemPath( setupHincludeDir )
+
+		configuration { "Debug", "x64" }
+			AddSystemPath( setupHincludeDir64 .. "d" )
+
+		configuration { "Release", "x64" }
+			AddSystemPath( setupHincludeDir64 )
+
+		configuration { "not x64" }
+			libdirs { libDir }
+			resoptions( "-D__i386__" )
+
+		configuration { "x64" }
+			libdirs { libDir64 }
 
 		-- Set wxWidgets libraries to link. The order we insert matters for the linker.
-		local releaseWxRuntimeName = "wxmsw"..wx_ver
-		local debugWxRuntimeName = "wxmsw"..wx_ver
-		if _OPTIONS["unicode"] then
-			releaseWxRuntimeName = releaseWxRuntimeName .. "u"
-			debugWxRuntimeName = debugWxRuntimeName .. "ud"
-			configuration { "Debug", "not StaticLib" }
-				links { debugWxRuntimeName, "wxexpatd", "wxjpegd", "wxpngd", "wxregexud", "wxtiffd", "wxzlibd" }
-				for _, lib in ipairs( winLibs) do
-					links { lib }
-				end
-			configuration { "Release", "not StaticLib" }
-				links { releaseWxRuntimeName, "wxexpat", "wxjpeg", "wxpng", "wxregexu", "wxtiff", "wxzlib" }
-				for _, lib in ipairs( winLibs) do
-					links { lib }
-				end
-		else
-			debugWxRuntimeName = debugWxRuntimeName .. "d"
-			configuration { "Debug", "not StaticLib" }
-				links { debugWxRuntimeName, "wxexpatd", "wxjpegd", "wxpngd", "wxregexd",	"wxtiffd", "wxzlibd" }
-				for _, lib in ipairs( winLibs) do
-					links { lib }
-				end
-			configuration { "Release", "not StaticLib" }
-				links { releaseWxRuntimeName, "wxexpat", "wxjpeg", "wxpng", "wxregex",	"wxtiff", "wxzlib" }
-				for _, lib in ipairs( winLibs) do
-					links { lib }
-				end
+		local wxLibs = { "wxmsw" .. wx.version .. unicodeSuffix, "wxexpat", "wxjpeg", "wxpng", "wxregex" .. unicodeSuffix, "wxtiff", "wxzlib" }
+		if 30 <= tonumber( wx.version ) then
+			wxLibs[ #wxLibs + 1 ] = "wxscintilla"
 		end
+
+		configuration { "Debug", "not StaticLib" }
+			for _, lib in ipairs( wxLibs ) do
+				links { lib .. "d" }
+			end
+
+		configuration { "Release", "not StaticLib" }
+			for _, lib in ipairs( wxLibs ) do
+				links { lib }
+			end
+
+		configuration { "not StaticLib" }
+			local winLibs =
+			{
+				"wsock32", "comctl32", "psapi", "ws2_32", "opengl32",
+				"ole32", "winmm", "oleaut32", "odbc32", "advapi32",
+				"oleaut32", "uuid", "rpcrt4", "gdi32", "comdlg32",
+				"winspool", "shell32", "kernel32"
+			}
+
+			if ActionUsesMSVC() then
+				table.insert( winLibs, { "gdiplus" } )
+			end
+
+			for _, lib in ipairs( winLibs) do
+				links { lib }
+			end
 
 		configuration( {} )
-
-		if ActionUsesGCC() then
-			releaseWxRuntimeName = releaseWxRuntimeName .. "_gcc"
-			debugWxRuntimeName = debugWxRuntimeName .. "_gcc"
-		elseif ActionUsesMSVC() then
-			releaseWxRuntimeName = releaseWxRuntimeName .. "_vc"
-			debugWxRuntimeName = debugWxRuntimeName .. "_vc"
-		end
-
-		releaseWxRuntimeName = releaseWxRuntimeName .. ".dll"
-		debugWxRuntimeName = debugWxRuntimeName .. ".dll"
 
 		-- Set the Windows defines.
 		defines { "__WXMSW__" }
-		-- Set the targets.
-		if shouldSetTarget then
-			if not ( kindVal == "WindowedApp" or kindVal == "ConsoleApp" ) then
-				if ActionUsesGCC() then
-					if _OPTIONS["unicode"] then
-						configuration { "Debug" }
-							targetdir { "wxmsw"..wx_ver.."umd_"..targetName.."_gcc" }
-						configuration { "Release" }
-							targetdir { "wxmsw"..wx_ver.."um_"..targetName.."_gcc" }
-					else
-						configuration { "Debug" }
-							targetdir { "wxmsw"..wx_ver.."md_"..targetName.."_gcc" }
-						configuration { "Release" }
-							targetdir { "wxmsw"..wx_ver.."m_"..targetName.."_gcc" }
-					end
-				else
-					if _OPTIONS["unicode"] then
-						configuration { "Debug" }
-							targetdir { "wxmsw"..wx_ver.."umd_"..targetName.."_vc" }
-						configuration { "Release" }
-							targetdir { "wxmsw"..wx_ver.."um_"..targetName.."_vc" }
-					else
-						configuration { "Debug" }
-							targetdir { "wxmsw"..wx_ver.."md_"..targetName.."_vc" }
-						configuration { "Release" }
-							targetdir { "wxmsw"..wx_ver.."m_"..targetName.."_vc" }
-					end
-				end
-			end
-		end
+
 		configuration( {} )
 
-		if _OPTIONS["wx-shared"] or copyDlls then
-			WindowsCopy( winWxRuntimePath .. releaseWxRuntimeName, SolutionTargetDir() )
-			WindowsCopy( winWxRuntimePath .. debugWxRuntimeName, SolutionTargetDir() )
+		if not wx.hasCopiedDlls and _OPTIONS["wx-shared"] then
+			local isx64 = presets.SolutionHasPlatform("x64")
+			local runtimePrefix = wx.root .. "\\" .. iif( isx64, "lib64", "lib" ) .. "\\" .. toolchain .. "_" .. linktype .. "\\wxmsw" .. wx.version .. unicodeSuffix
+			local runtimeSuffix = "_" .. toolchain .. iif( isx64 and ActionUsesMSVC() and 30 <= tonumber( wx.version ), "_x64", "" ) .. ".dll"
+
+			presets.CopyFile( runtimePrefix .. runtimeSuffix, SolutionTargetDir() )
+			presets.CopyFile( runtimePrefix .. "d" .. runtimeSuffix, SolutionTargetDir() )
+
+			wx.hasCopiedDlls = true
 		end
-	else
-	-- ******* LINUX SETUP *************
-	-- *	Settings that are Linux specific.
-	-- *********************************
-		-- Ignore resource files in Linux.
+
+	else -- not windows
+
 		excludes "**.rc"
 
 		-- Set wxWidgets Debug build/link options.
 		configuration { "Debug" }
-			buildoptions { "`wx-config --debug=yes --cflags`" }
-			linkoptions { "`wx-config --debug=yes --libs std, gl`" }
+			ProcessLinks( true )
+			ProcessBuildOptions( true )
 
 		-- Set the wxWidgets Release build/link options.
 		configuration { "Release" }
-			buildoptions { "`wx-config --debug=no --cflags`" }
-			linkoptions { "`wx-config --libs std, gl`" }
+			ProcessLinks( false )
+			ProcessBuildOptions( false )
 
 		-- Set the Linux defines.
 		configuration( {} )
-		defines "__WXGTK__"
-
-		-- Set the targets.
-		if shouldSetTarget then
-			if not ( kindVal == "WindowedApp" or kindVal == "ConsoleApp" ) then
-				configuration { "Debug" }
-					targetdir { wx.LibName( targetName, wxVer, true ) }	--"`wx-config --debug=yes --basename`_"..targetName.."-`wx-config --release`"
-				configuration { "Release" }
-					targetdir { wx.LibName( targetName, wxVer ) }	--"`wx-config --basename`_"..targetName.."-`wx-config --release`"
-			end
+		if os.is( "linux" ) then
+			defines "__WXGTK__"
+		elseif os.is( "macosx" ) then
+			defines "__WXMAC__"
+		else
+			error( "This operating system is not currently supported for wxWidgets configuration" )
 		end
 	end
 
@@ -375,107 +291,98 @@ function wx.PosixLibName( targetName, isDebug )
 	return
 end
 
-function wx.LibName( targetName, wxVer, isDebug )
+function wx.LibName( targetName, isDebug )
 	local name = ""
 	-- Make the parameters optional.
-	local wx_ver = wxVer or "28"
 	local debug = ""
-	local unicode = ""
+	local unicode = iif( UseUnicode(), "u", "" )
+	local wx_ver = wx.version
 	if isDebug then debug = "d" end
-	if _OPTIONS["unicode"] then unicode = "u" end
 
 	if "windows" == os.get() then
 		local monolithic = ""
-		local vc8 = ""
 
 		if _OPTIONS["wx-shared"] then monolithic = "m" end
-		name = "wxmsw"..wx_ver..unicode..monolithic..debug.."_"..targetName
+		name = "wxmsw" .. wx_ver .. unicode .. monolithic .. debug.. "_" .. targetName
 	elseif "linux" == os.get() then
 		wx_ver = wx_ver:sub( 1, 1 ).."."..wx_ver:sub( 2 )
 		name = "wx_gtk2"..unicode..debug.."_"..targetName:lower().."-"..wx_ver
-		--print( name )
 	else
 		local debug = "no"
 		if isDebug then debug = "yes" end
 		name = "`wx-config --debug="..debug.." --basename`_"..targetName.."-`wx-config --release`"
 	end
-
 	return name
 end
 
 ---	Configure a C/C++ package to use wxAdditions.
---	wx.ConfigureAdditions( package, { "libsToLink" }, wxVer = "28" )
-function wx.ConfigureAdditions( libsToLink, wxVer )
-	local wxadditionsRoot = ""
-	if os.is( "windows" ) then
-		wxadditionsRoot = os.getenv( "WXADDITIONS" )
-		if not wxadditionsRoot then
-			error( "missing the WXADDITIONS environment variable", 1 )
-		end
-	end
-	-- Check to make sure that the package is valid.
+function wx.ConfigureAdditions( libsToLink )
 	assert( type( libsToLink ) == "table", "Param1:libsToLink type missmatch, should be a table." )
-	
-	if "windows" == os.get() then
-		--check for headers existing.
-		local f =io.open( wxadditionsRoot .. "/include/wx/link_additions.h" )
-		if f==nil then
-			error( "can't find include/wx/link_additions.h! - check the value of WXADDTIIONS (" .. wxadditionsRoot .. ")" )
-		end
-	
-		VerifyWxDlls( wxadditionsRoot, "/lib/vc_dll/wxmsw28_awx_vc.dll", "WXADDITIONS" )
-	end
-	
-
-	local winWxRuntimePath = wxadditionsRoot .. "\\lib\\gcc_dll\\"
-	local dllSuffix = "_gcc.dll"
-	if not ActionUsesGCC() then
-		winWxRuntimePath = wxadditionsRoot .. "\\lib\\vc_dll\\"
-		dllSuffix = "_vc.dll"
-	end
-
-	local wx_ver = wxVer or "28"
-
-	if os.is( "windows" ) then
-		-- Set wxAdditions include paths
-		AddSystemPath( wxadditionsRoot .. "/include" )
-
-		-- Set the linker options.
-		local toolchain = iif( ActionUsesGCC(), "gcc", "vc" )
-		local linktype = iif( _OPTIONS["wx-shared"], "dll", "lib" )
-		libdirs { wxadditionsRoot .. "/lib/" .. toolchain .. "_" .. linktype }
-	end
-
-	-- Set wxAdditions libraries to link.
-	-- wx.LibName( targetName, wxVer, isDebug )
 
 	local libs = {}
+	local debugLibs = {}
 	for _, v in ipairs( libsToLink ) do
-		local libname = wx.LibName( v, wx_ver, true )
+		local debugLibname = wx.LibName( v, true )
+		table.insert( debugLibs, debugLibname )
+
+		local libname = wx.LibName( v )
 		table.insert( libs, libname )
-		if _OPTIONS["wx-shared"] or copyDlls then
-			WindowsCopy( winWxRuntimePath .. libname .. dllSuffix, SolutionTargetDir() )
-		end
 	end
+
 	configuration { "Debug", "not StaticLib" }
-		for _, lib in ipairs( libs ) do
+		for _, lib in ipairs( debugLibs ) do
 			links { lib }
 		end
-	libs = {}
-	for _, v in ipairs( libsToLink ) do
-		local libname = wx.LibName( v, wx_ver )
-		table.insert( libs, libname )
-		if _OPTIONS["wx-shared"] then
-			WindowsCopy( winWxRuntimePath .. libname .. dllSuffix, SolutionTargetDir() )
-		end
-	end
+
 	configuration { "Release", "not StaticLib" }
 		for _, lib in ipairs( libs ) do
 			links { lib }
 		end
 
 	configuration( {} )
+
+	if os.is( "windows" ) then
+
+		local wxadditionsRoot = os.getenv( "WXADDITIONS" )
+		if not wxadditionsRoot then
+			error( "missing the WXADDITIONS environment variable", 1 )
+		end
+
+		if not io.open( wxadditionsRoot .. "/include/wx/link_additions.h" ) then
+			error( "can't find include/wx/link_additions.h! - check the value of WXADDTIIONS (" .. wxadditionsRoot .. ")" )
+		end
+
+		if tonumber( wx.version ) <= 28 then
+			presets.VerifyDllVersion( wxadditionsRoot, "/lib/vc_dll/wxmsw" .. wx.version .. "_awx_vc.dll", "WXADDITIONS" )
+		end
+
+		AddSystemPath( wxadditionsRoot .. "/include" )
+
+		local toolchain = iif( ActionUsesGCC(), "gcc", "vc" ) .. wx.compilerVersion
+		local linktype = iif( _OPTIONS["wx-shared"], "dll", "lib" )
+
+		configuration { "x64" }
+			libdirs { wxadditionsRoot .. "/lib64/" .. toolchain .. "_" .. linktype }
+
+		configuration { "not x64" }
+			libdirs { wxadditionsRoot .. "/lib/" .. toolchain .. "_" .. linktype }
+
+		configuration( {} )
+
+		if not wx.hasCopiedAdditionsDlls and _OPTIONS["wx-shared"] then
+			local runtimeLibDir = iif( presets.SolutionHasPlatform("x64"), "lib64", "lib" )
+
+			local function BuildRuntimeName( libname )
+				return wxadditionsRoot .. "\\" .. runtimeLibDir .. "\\" .. toolchain .. "_dll\\" .. libname .. "_" .. toolchain .. ".dll"
+			end
+
+			for _, lib in ipairs( libs ) do
+				presets.CopyFile( BuildRuntimeName( lib ), SolutionTargetDir() )
+			end
+
+			for _, lib in ipairs( debugLibs ) do
+				presets.CopyFile( BuildRuntimeName( lib ), SolutionTargetDir() )
+			end
+		end
+	end
 end
-
-
-
