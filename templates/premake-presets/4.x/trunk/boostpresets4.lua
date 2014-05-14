@@ -227,6 +227,34 @@ function boost.AddLinks( libsToLink, LibLinker )
 	boost.AddLinksToConfiguration( libsToLink, false, LibLinker )
 end
 
+function boost.AddCompressionLibsForWindows( libsToLink )
+	if os.is( "windows" ) then
+		local libiostream
+		local libbzip
+		local libzlib
+		for _, libName in ipairs( libsToLink ) do
+			if libName == "iostreams" then
+				libiostream = true
+			end
+			if libName == "bzip2" then
+				libbzip = true
+			end
+			if libName == "zlib" then
+				libzlib = true
+			end
+		end
+		if libiostream then
+			if not bzip then
+				table.insert( libsToLink, "bzip2" )
+			end
+			if not zlib then
+				table.insert( libsToLink, "zlib" )
+			end
+		end
+	end
+	return libsToLink
+end
+
 ---	Configure a C/C++ package to use Boost.
 --	@param pkg {table} Premake 'package' passed in that gets all the settings manipulated.
 --	@param libsToLink {table} [DEF] Table that contains the names of the Boost libraries needed to build.
@@ -257,7 +285,8 @@ function boost.Configure( libsToLink, gccVer, boostVer )
 	libsToLink = libsToLink or {}
 	-- Check to make sure that the libsToLink is valid.
 	assert( type( libsToLink ) == "table", "Param1:libsToLink type missmatch, should be a table." )
-
+	libsToLink = boost.AddCompressionLibsForWindows( libsToLink )
+	
 	cfg = configuration()
 
 	if ( cfg.kind == "StaticLib" ) then
@@ -327,6 +356,7 @@ function boost.CopyDynamicLibraries( libsToLink, destinationDirectory, gccVer, b
 		end
 
 		-- copy dlls to bin dir
+		libsToLink = boost.AddCompressionLibsForWindows( libsToLink )
 		if os.is("windows") then
 			function copyLibs( debugCopy )
 				for _, v in ipairs( libsToLink ) do

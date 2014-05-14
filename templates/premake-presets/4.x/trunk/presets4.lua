@@ -512,7 +512,7 @@ function Configure()
 	configuration( { "vs*", "release-with-debug-symbols", "Release", "not StaticLib" } )
 		linkoptions "/DEBUG"
 
-        configuration( { "release-with-debug-symbols", "Release" } )
+        configuration( { "release-with-debug-symbols or macosx", "Release" } )
 		flags( "Symbols" )
 
 	configuration( "vs*", "not vs2005" )
@@ -523,9 +523,9 @@ function Configure()
     -- OPERATING SYSTEM SPECIFIC SETTINGS -----------------------------------------
 	--
 	configuration( "macosx" )
-        AddSystemPath( "/usr/local/include" )
-        libdirs( "/usr/local/lib" )
-        buildoptions("-ftemplate-depth=900")
+        	AddSystemPath( "/usr/local/include" )
+	        libdirs( "/usr/local/lib" )
+	        buildoptions("-ftemplate-depth=900")                                                                
 
 	configuration( "windows" )
 		-- Maybe add "*.manifest" later, but it seems to get in the way.
@@ -849,10 +849,18 @@ function presets.CopyFile( sourcePath, destinationDirectory )
 	if not os.isfile( unquotedSource ) then
 		print( "Could not find file: " .. unquotedSource )
 	end
+	
+	local quote = ""
+	if os.is( "linux" ) or os.is( "macosx" ) then
+		quote = "'"
+	end
+	
+	local source = quote .. unquotedSource .. quote
+	local destination = quote .. unquotedDestination .. quote
 
-	print( "os.copyfile( " .. unquotedSource .. ", " .. unquotedDestination .. " )" ); io.stdout:flush()
+	print( "os.copyfile( " .. source .. ", " .. destination .. " )" ); io.stdout:flush()
 
-	local copied, msg = os.copyfile( unquotedSource, unquotedDestination )
+	local copied, msg = os.copyfile( source, destination )
 	if not copied then
 		error( "presets.CopyFile Failed: " .. msg, 2 )
 	end
@@ -1030,9 +1038,13 @@ end
 local premakesGccGetLdFlags = premake.gcc.getldflags
 function GccLdFlagsWithSoName( cfg )
 	local ldflags = premakesGccGetLdFlags( cfg )
+	local soname = "soname"
+	if os.is( "macosx" ) then
+		soname = "install_name"
+	end
 
 	if cfg.kind == "SharedLib" then
-		table.insert( ldflags, "-Wl,-soname," .. cfg.linktarget.name ) -- the '.1' should be the major version of the shared library being produced. need a way to pass it in, but it will probably be a built in feature of premake, someday.
+		table.insert( ldflags, "-Wl,-" .. soname .. "," .. cfg.linktarget.name ) -- the '.1' should be the major version of the shared library being produced. need a way to pass it in, but it will probably be a built in feature of premake, someday.
 	end
 
 	return ldflags
@@ -1092,7 +1104,7 @@ function XcodeLastUpgradeCheck( tr )
 
         if ( text == 'isa = PBXProject;' ) then
             old_p( indent, 'attributes = {' )
-            old_p( indent + 1,'LastUpgradeCheck = 0500;')
+            old_p( indent + 1,'LastUpgradeCheck = 0700;')
             old_p( indent,'};')
         end
     end

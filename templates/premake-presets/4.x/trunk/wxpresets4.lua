@@ -14,6 +14,10 @@ newoption
 	description = "Link against wxWidgets as a shared library"
 }
 
+if not os.is("windows") then
+	EnableOption( "wx-shared" )
+end
+
 local function GetVersion()
 	if os.is("windows") then
 		local path = path.translate( path.join( path.translate( wx.root, "/" ), path.translate( "include/wx/version.h", "/" ) ) )
@@ -68,11 +72,22 @@ local function ProcessBacktickCmd( cmd )
 end
 
 local function ProcessLinks( debug )
-	if not os.is( "macosx" ) then
-		local cmd = "wx-config --debug=" .. iif( debug, "yes", "no" ) .. " --libs gl, stc, propgrid, aui, std"
-		local output = ProcessBacktickCmd( cmd )
-		local staticLib = "StaticLib" == presets.GetCustomValue( "kind" )
+	local cmd = "wx-config --debug=" .. iif( debug, "yes", "no" ) .. " --libs gl, stc, propgrid, aui, std"
+	local output = ProcessBacktickCmd( cmd )
+	local staticLib = "StaticLib" == presets.GetCustomValue( "kind" )
 
+	if os.is("macosx") then
+		output = output:gsub( "\n", "" )
+		output = output:gsub( "%-framework QuickTime", "" )
+
+		if staticLib then
+			output = output:gsub( "%-l[^ ]+ ?", "" )
+		end
+
+		if output:len() > 0 then
+			linkoptions( output )
+		end
+	else
 		for i in string.gmatch(output, "%S+") do
 			if 1 == i:find( "-l" ) then
 				if not staticLib then
@@ -82,11 +97,7 @@ local function ProcessLinks( debug )
 				linkoptions{ i }
 			end
 		end
-	else
-		local cmd = "wx-config --debug=" .. iif( debug, "yes", "no" ) .. " --libs" -- Is this correct? DOes it need gl, stc, propgrid, aui, std?
-		local output = ProcessBacktickCmd( cmd )
-		linkoptions{ output }
-	end
+	end	
 end
 
 local function ProcessBuildOptions( debug )
